@@ -244,7 +244,7 @@
   function clearLocalClip(now) {
     if (!localClip) return;
     localClip = null;
-    setClip(commandedClip, now);
+    setClip(commandedClip, now === undefined ? performance.now() : now);
   }
 
   function advanceAnimation(now) {
@@ -304,7 +304,7 @@
    */
   function updateClimbing(now, wb) {
     if (drag || body.held) {
-      if (body.climbing) stopClimb();
+      if (body.climbing) stopClimb(now);
       return;
     }
 
@@ -312,18 +312,18 @@
       if (body.y <= climbTargetY) {
         // Made it. Hang here for a bit, then let go.
         body.vy = 0;
-        setClip('hang', now);
+        setLocalClip('hang', now);
         if (!hangUntil) hangUntil = now + HANG_MS;
         if (now >= hangUntil) {
-          stopClimb();
+          stopClimb(now);
           body.vy = 0;
         }
       } else if (now >= climbUntil) {
         // Gave up part way; drop from here.
-        stopClimb();
+        stopClimb(now);
         body.vy = 0;
       } else {
-        setClip('climb', now);
+        setLocalClip('climb', now);
       }
       return;
     }
@@ -347,8 +347,9 @@
     sendClimb(true);
   }
 
-  function stopClimb() {
+  function stopClimb(now) {
     hangUntil = 0;
+    if (localClip === 'climb' || localClip === 'hang') clearLocalClip(now);
     if (!body.climbing) return;
     body.climbing = null;
     sendClimb(false);
@@ -539,7 +540,11 @@
     // Walking should look like walking even when the brain says idle, but a
     // landing gets to play out first. Everything here is a local override:
     // it is handed back to main's clip the moment it stops applying.
-    if (!body.climbing && !drag && now >= landedUntil) {
+    if (drag) {
+      // Carried: main owns the pose (dangle). A stale walk/fall override
+      // would otherwise outlive the grab and block it.
+      clearLocalClip(now);
+    } else if (!body.climbing && now >= landedUntil) {
       if (!body.grounded && body.vy > 120) {
         setLocalClip('fall', now);
       } else if (dir !== 0 && body.grounded && pipState === 'idle') {
