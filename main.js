@@ -27,6 +27,7 @@ const mood = require('./src/main/mood.js');
 const clicks = require('./src/main/clicks.js');
 const Lines = require('./src/renderer/lines.js');
 const Bubbles = require('./src/renderer/bubbles.js');
+const Animations = require('./src/renderer/animations.js');
 
 /* ------------------------------------------------------------------ *
  * Flags and paths
@@ -134,6 +135,8 @@ function runApp(store) {
     batteryWarnedAt: 0,
     chasingUntil: 0,
     lastChaseSendAt: 0,
+    cursorX: 0,
+    pipX: 0,
     onboardingStep: -1
   };
 
@@ -246,8 +249,18 @@ function runApp(store) {
    * Reactions, moods, behaviours
    * ---------------------------------------------------------------- */
 
-  function react(clip, ms) {
-    world.reaction = { clip: clip, until: now() + scaled(ms || REACTION_MS[clip] || 1800) };
+  /**
+   * @param {string} clip
+   * @param {number} [ms]      override the default length
+   * @param {object} [move]    {walkDir, walkSpeed} to react while moving
+   */
+  function react(clip, ms, move) {
+    world.reaction = {
+      clip: clip,
+      until: now() + scaled(ms || REACTION_MS[clip] || 1800),
+      walkDir: move ? move.walkDir : 0,
+      walkSpeed: move ? move.walkSpeed : 0
+    };
   }
 
   function bumpMood(event) {
@@ -875,6 +888,7 @@ function runApp(store) {
     const b = overlay.getBounds();
     const x = point.x - b.x;
     const y = point.y - b.y;
+    world.cursorX = x;
     send('pip:cursor', {
       x: x, y: y,
       inside: x >= 0 && y >= 0 && x < b.width && y < b.height
@@ -998,7 +1012,8 @@ function runApp(store) {
       world.asleep = false;
     });
 
-    ipcMain.on('pip:dropped', () => {
+    ipcMain.on('pip:dropped', (_e, payload) => {
+      if (payload && typeof payload.x === 'number') world.pipX = payload.x;
       world.held = false;
       react('dizzy');
       particles('star', 4);
@@ -1013,7 +1028,10 @@ function runApp(store) {
       }
     });
 
-    ipcMain.on('pip:click', () => {
+    ipcMain.on('pip:click', (_e, payload) => {
+      // The click lands on Pip, so this is also the best fix we get on where
+      // he currently is.
+      if (payload && typeof payload.x === 'number') world.pipX = payload.x;
       const res = clicks.record(world.clicks, now());
       world.clicks = res.state;
 
@@ -1030,10 +1048,17 @@ function runApp(store) {
 
       if (res.pattern === 'rapid') {
         if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
-        react('sulk');
+        // Puff up and scoot away from the pointer. The movement has to ride on
+        // the reaction itself - a stationary reaction outlasts any wander we
+        // could set here and would swallow the scoot entirely.
+        const away = world.cursorX > 0 && world.pipX > 0
+          ? (world.pipX >= world.cursorX ? 1 : -1)
+          : (rng() < 0.5 ? -1 : 1);
+        // Run the huff for exactly as long as the sulk animation lasts, so he
+        // does not finish scooting in the idle pose.
+        react('sulk', Animations.clipDuration('sulk'), { walkDir: away, walkSpeed: brain.BASE_RUN });
         say('annoyed', true);
-        // Puff up and scoot away from where the pointer is.
-        world.wander = { dir: rng() < 0.5 ? -1 : 1, until: now() + 1400, moving: true };
+        particles('sweat', 3);
         return;
       }
 

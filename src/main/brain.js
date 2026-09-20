@@ -87,7 +87,7 @@ function paceFor(state, mood, hour) {
  *   continuousWorkMs {number}
  *   drowsyAfterMs  {number}
  *   exhaustedAfterMs {number}
- *   reaction       {{clip, until, state}|null}
+ *   reaction       {{clip, until, walkDir, walkSpeed}|null}
  *   behavior       {{clip, until}|null}  a running idle behaviour
  *   wander         {{dir, until, moving}}  carried between calls
  *   onBreak        {boolean} a Pomodoro break is running - Pip lounges
@@ -132,14 +132,7 @@ function decide(input) {
     return still('celebrating', 'celebrating');
   }
 
-  // 4. thirsty ------------------------------------------------------
-  if (input.thirsty) return still('thirsty', 'thirsty');
-
-  // 5. exhausted ----------------------------------------------------
   const worked = input.continuousWorkMs || 0;
-  if (input.exhaustedAfterMs && worked >= input.exhaustedAfterMs) {
-    return still('exhausted', 'exhausted');
-  }
 
   /** Advance the stroll/stand-around cycle if this leg of it has run out. */
   const advanceWander = () => {
@@ -156,6 +149,27 @@ function decide(input) {
     };
   };
 
+  // 4. thirsty ------------------------------------------------------
+  // Pip carries his cup about rather than standing to attention: the brief
+  // only asks for him to be stationary when exhausted or asleep, and a water
+  // reminder can sit unanswered for hours.
+  if (input.thirsty) {
+    const pace = paceFor('idle', mood, hour) * activity.speed;
+    if (input.quiet || input.hidden) return still('thirsty', 'thirsty');
+    wander = advanceWander();
+    if (wander.moving && pace > 0) {
+      return { state: 'thirsty', clip: 'walk', walkDir: wander.dir, walkSpeed: BASE_WALK * pace, wander: wander };
+    }
+    return { state: 'thirsty', clip: 'thirsty', walkDir: 0, walkSpeed: 0, wander: wander };
+  }
+
+  // 5. exhausted ----------------------------------------------------
+  // Genuinely stationary, per the brief - but a break resets the streak, so
+  // this always has a way out.
+  if (input.exhaustedAfterMs && worked >= input.exhaustedAfterMs) {
+    return still('exhausted', 'exhausted');
+  }
+
   // 6. drowsy -------------------------------------------------------
   // Outranks reactions on purpose: once Pip is this tired, being petted does
   // not perk him up, he just keeps plodding. Still mobile, only slower.
@@ -171,11 +185,13 @@ function decide(input) {
 
   // 7. a short-lived reaction to you --------------------------------
   if (input.reaction && now < input.reaction.until) {
+    // Some reactions move - scooting away in a huff is the whole point of
+    // that one, and a stationary reaction would swallow it.
     return {
       state: 'reaction',
       clip: input.reaction.clip,
-      walkDir: 0,
-      walkSpeed: 0,
+      walkDir: input.reaction.walkDir || 0,
+      walkSpeed: input.reaction.walkSpeed || 0,
       wander: wander
     };
   }
