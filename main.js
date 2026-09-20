@@ -38,9 +38,14 @@ const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
 /** Dev runs compress every duration by 60x so a 25 minute block takes 25s. */
 const TIME_SCALE = IS_DEV ? 1 / 60 : 1;
 
-/** Dev runs keep their own userData so testing never pollutes real stats. */
+/**
+ * Dev and smoke runs keep their own userData so neither ever pollutes your
+ * real stats. Without this the smoke test would write to the live profile.
+ */
 if (IS_DEV) {
   app.setPath('userData', path.join(app.getPath('appData'), 'Pip-dev'));
+} else if (IS_SMOKE) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'Pip-smoke'));
 }
 
 app.setAppUserModelId('com.pip.desktopbuddy');
