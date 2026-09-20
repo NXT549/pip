@@ -42,6 +42,8 @@
 
   /** Above this ground speed Pip is running, not trotting. */
   const RUN_SPEED = 70;            // DIP/s
+  /** Below this he is not travelling, so the walk cycle must not be drawn. */
+  const MIN_WALK_VX = 2;           // DIP/s
 
   /** How far Pip swings behind the pointer while being carried, in radians. */
   const MAX_SWAY = 0.38;
@@ -558,12 +560,17 @@
     } else if (!body.climbing && now >= landedUntil) {
       if (!body.grounded && body.vy > 120) {
         setLocalClip('fall', now);
-      } else if (dir !== 0 && body.grounded && pipState === 'idle') {
-        // Anything brisker than a stroll reads as a run.
+      } else if (dir !== 0 && body.grounded && pipState === 'idle'
+                 && Math.abs(body.vx) > MIN_WALK_VX) {
+        // Anything brisker than a stroll reads as a run. The speed check is
+        // what stops the moonwalk: Physics.clamp zeroes vx when Pip is pressed
+        // against a wall, so a walk cycle with no travel cannot be drawn at
+        // all - whatever pinned the direction in the first place.
         setLocalClip(Math.abs(body.vx) > RUN_SPEED ? 'run' : 'walk', now);
       } else if (localClip && (localClip === 'walk' || localClip === 'run' || localClip === 'fall')
-                 && body.grounded && dir === 0) {
-        // Stopped, and the looping override would otherwise run forever.
+                 && body.grounded && (dir === 0 || Math.abs(body.vx) <= MIN_WALK_VX)) {
+        // Stopped - or being held in place by a wall - and the looping
+        // override would otherwise run forever.
         clearLocalClip(now);
       }
     }
@@ -608,7 +615,19 @@
     }
 
     stuckFor += 1;
-    if (stuckFor < 3 || stuckReported) return;
+    if (stuckFor < 3) return;
+
+    // Recover first, report second. Whatever pinned him, an unreachable goto
+    // and a stale override are the two things the renderer can let go of, and
+    // a nudge off the wall breaks the geometry case.
+    gotoX = null;
+    clearLocalClip(now);
+    if (body.x <= wb.left + 1) body.x = Math.min(wb.right, wb.left + 4);
+    else if (body.x >= wb.right - 1) body.x = Math.max(wb.left, wb.right - 4);
+    body.vx = 0;
+    stuckFor = 0;
+
+    if (stuckReported) return;
     stuckReported = true;
     notify('pip:error', {
       message: 'STUCK: walk cycle running but not moving',
