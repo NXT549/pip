@@ -70,6 +70,13 @@ npm install
 npm start
 ```
 
+npm 11 prints a warning that `electron-winstaller` has an install script it
+has not run. That is expected and harmless: it is a transitive dependency of
+electron-builder used for Squirrel installers, which Pip does not build. Both
+`npm start` and `npm run dist` work without approving it. Electron itself no
+longer uses an install script — it fetches its binary on first use, so the
+first `npm start` after a clean install pauses briefly to download it.
+
 Dev mode divides every duration by 60 (a 25-minute Pomodoro takes 25 seconds),
 makes idle behaviours far more frequent, uses a **separate settings folder** so
 you do not pollute your real stats, registers no login item, and adds a
@@ -242,8 +249,13 @@ Drag him somewhere else, or **Hide Pip** from the tray. **Quiet mode for 1
 hour** keeps him around but stops the wandering and the speech bubbles.
 
 **Where are the logs?**
-`%APPDATA%\Pip\logs\pip.log` (and `Pip-dev` when running `npm run dev`). They
-rotate at about 1 MB.
+`%APPDATA%\Pip\logs\pip.log`, rotating at about 1 MB. `npm run dev` uses
+`%APPDATA%\Pip-dev` and `npm run smoke` uses `%APPDATA%\Pip-smoke`, so
+neither can disturb your real settings or stats.
+
+**How do I start over?**
+Quit Pip and delete `%APPDATA%\Pip`. Everything he knows lives in that one
+folder, and he will run first-time onboarding again next launch.
 
 ---
 
