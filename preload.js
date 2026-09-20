@@ -13,8 +13,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 const INBOUND = [
   'pip:settings',   // {flavor, scale, activityLevel, quiet, dev}
   'pip:bounds',     // {left, right, top, bottom, width, height}
-  'pip:state',      // {state, clip, facing, walkDir, ...}
+  'pip:state',      // {state, clip, facing, walkDir, walkSpeed}
   'pip:cursor',     // {x, y, inside}
+  'pip:say',        // {text, ms}
+  'pip:particles',  // {kind, count}
+  'pip:pomodoro',   // {running, phase, remainingMs, totalMs}
+  'pip:goto',       // {x} - trot to this overlay x
   'pip:reset'       // no payload - drop Pip in from the top again
 ];
 
@@ -25,6 +29,9 @@ const OUTBOUND = [
   'pip:grabbed',         // {}
   'pip:dropped',         // {x, y} in overlay DIPs
   'pip:click',           // {kind:'single'|'double', x, y}
+  'pip:pet',             // {} - cursor rested on Pip for ~1s
+  'pip:startle',         // {} - fast jerky cursor movement nearby
+  'pip:climb',           // {climbing:boolean}
   'pip:context-menu',    // {x, y} in overlay DIPs
   'pip:error'            // {message, stack}
 ];
@@ -45,4 +52,34 @@ contextBridge.exposeInMainWorld('pipBridge', {
   on: on,
   send: send,
   channels: { inbound: INBOUND.slice(), outbound: OUTBOUND.slice() }
+});
+
+/* ------------------------------------------------------------------ *
+ * Settings and debug windows
+ *
+ * Same preload, different surface. The overlay never touches these and the
+ * settings window never touches pipBridge - each just ignores the other.
+ * ------------------------------------------------------------------ */
+
+contextBridge.exposeInMainWorld('pipSettings', {
+  /** @returns {Promise<{settings, today}>} */
+  get: () => ipcRenderer.invoke('settings:get'),
+  /** @param {object} patch partial settings */
+  set: (patch) => ipcRenderer.send('settings:set', { patch: patch }),
+  /** @param {string} action one of the shared action names */
+  action: (action) => ipcRenderer.send('settings:action', { action: action }),
+  onUpdate: (handler) => {
+    const wrapped = (_event, payload) => handler(payload);
+    ipcRenderer.on('settings:update', wrapped);
+    return () => ipcRenderer.removeListener('settings:update', wrapped);
+  }
+});
+
+contextBridge.exposeInMainWorld('pipDebug', {
+  onState: (handler) => {
+    const wrapped = (_event, payload) => handler(payload);
+    ipcRenderer.on('debug:state', wrapped);
+    return () => ipcRenderer.removeListener('debug:state', wrapped);
+  },
+  force: (payload) => ipcRenderer.send('debug:force', payload)
 });

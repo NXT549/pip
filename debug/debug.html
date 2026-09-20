@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:;">
+<title>Pip debug</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0; padding: 12px;
+    background: #16141c; color: #e8e4f0;
+    font: 12px/1.45 "Cascadia Mono", Consolas, ui-monospace, monospace;
+  }
+  h2 {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+    color: #8f88a3; margin: 14px 0 6px;
+  }
+  h2:first-child { margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 2px 0; vertical-align: top; }
+  td.k { color: #8f88a3; width: 42%; }
+  td.v { color: #f4778c; }
+  .grid { display: flex; flex-wrap: wrap; gap: 4px; }
+  button {
+    background: #262130; color: #e8e4f0; border: 1px solid #3a3348;
+    border-radius: 4px; padding: 3px 7px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: #6b6280; }
+  button.on { background: #e2415a; border-color: #e2415a; color: #fff; }
+  .wide { width: 100%; }
+</style>
+</head>
+<body>
+
+<h2>Now</h2>
+<table>
+  <tr><td class="k">state</td><td class="v" id="state">-</td></tr>
+  <tr><td class="k">clip</td><td class="v" id="clip">-</td></tr>
+  <tr><td class="k">flavor</td><td class="v" id="flavor">-</td></tr>
+  <tr><td class="k">mood</td><td class="v" id="mood">-</td></tr>
+  <tr><td class="k">continuous work</td><td class="v" id="work">-</td></tr>
+  <tr><td class="k">idle time</td><td class="v" id="idle">-</td></tr>
+  <tr><td class="k">pomodoro</td><td class="v" id="pomodoro">-</td></tr>
+  <tr><td class="k">water due in</td><td class="v" id="water">-</td></tr>
+  <tr><td class="k">clock offset</td><td class="v" id="offset">-</td></tr>
+</table>
+
+<h2>Force state</h2>
+<div class="grid" id="states"></div>
+
+<h2>Force clip</h2>
+<div class="grid" id="clips"></div>
+
+<h2>Flavor</h2>
+<div class="grid" id="flavors"></div>
+
+<h2>Time</h2>
+<div class="grid">
+  <button type="button" id="ff10" class="wide">Fast-forward 10 minutes</button>
+  <button type="button" id="ffReset" class="wide">Reset clock offset</button>
+</div>
+
+<script src="../src/renderer/palettes.js"></script>
+<script src="../src/renderer/animations.js"></script>
+<script src="debug.js"></script>
+</body>
+</html>

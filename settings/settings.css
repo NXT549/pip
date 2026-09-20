@@ -1,0 +1,236 @@
+/* settings.css - Pip's settings window.
+   Plain CSS, no framework. Follows the system light/dark preference. */
+
+:root {
+  --bg: #f6f5f8;
+  --panel: #ffffff;
+  --ink: #23202b;
+  --ink-soft: #6b6676;
+  --line: #e2dfe8;
+  --accent: #e2415a;
+  --accent-ink: #ffffff;
+  --field: #ffffff;
+  --field-line: #cfcad8;
+  --shadow: 0 1px 2px rgba(35, 32, 43, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1922;
+    --panel: #23202b;
+    --ink: #f1eef6;
+    --ink-soft: #a49db2;
+    --line: #322e3d;
+    --accent: #f4778c;
+    --accent-ink: #23202b;
+    --field: #2b2735;
+    --field-line: #423c51;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  padding: 18px 20px 28px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0 0 2px;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  color: var(--ink-soft);
+  margin: 0 0 18px;
+}
+
+section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+
+h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+}
+
+/* ---- flavour picker ---- */
+
+.flavors {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.flavor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px 7px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--field);
+  cursor: pointer;
+  transition: border-color 80ms ease;
+}
+
+.flavor:hover { border-color: var(--field-line); }
+
+.flavor[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.flavor canvas {
+  image-rendering: pixelated;
+  display: block;
+}
+
+.flavor span {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+
+.flavor[aria-pressed="true"] span {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---- rows ---- */
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-of-type { border-top: 0; }
+
+.row label { flex: 1; }
+
+.row .hint {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+input[type="number"] {
+  width: 74px;
+  padding: 5px 8px;
+  background: var(--field);
+  color: var(--ink);
+  border: 1px solid var(--field-line);
+  border-radius: 5px;
+  font: inherit;
+  text-align: right;
+}
+
+input[type="number"]:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+select {
+  padding: 5px 8px;
+  background: var(--field);
+  color: var(--ink);
+  border: 1px solid var(--field-line);
+  border-radius: 5px;
+  font: inherit;
+  min-width: 120px;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+/* ---- today ---- */
+
+.today {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.stat {
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+}
+
+.stat .value {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.stat .label {
+  color: var(--ink-soft);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* ---- actions ---- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--field-line);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover { border-color: var(--ink-soft); }
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-soft);
+  font-size: 12px;
+  margin: 10px 2px 0;
+}

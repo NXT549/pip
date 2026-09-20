@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;">
+<title>Pip settings</title>
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+
+<h1>Pip</h1>
+<p class="subtitle">A tiny jellybean who lives on your desktop. Changes apply straight away.</p>
+
+<section>
+  <h2>Flavor</h2>
+  <div class="flavors" id="flavors"></div>
+</section>
+
+<section>
+  <h2>Appearance</h2>
+  <div class="row">
+    <label for="petSize">Pet size<span class="hint">How big Pip is drawn on screen.</span></label>
+    <select id="petSize">
+      <option value="small">Small</option>
+      <option value="medium">Medium</option>
+      <option value="large">Large</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="activityLevel">Activity level<span class="hint">How often Pip wanders about and plays.</span></label>
+    <select id="activityLevel">
+      <option value="calm">Calm</option>
+      <option value="normal">Normal</option>
+      <option value="hyper">Hyper</option>
+    </select>
+  </div>
+</section>
+
+<section>
+  <h2>Pomodoro</h2>
+  <div class="row">
+    <label for="pomodoroWork">Work block<span class="hint">Minutes of focus per block.</span></label>
+    <input type="number" id="pomodoroWork" min="1" max="180" step="1">
+  </div>
+  <div class="row">
+    <label for="pomodoroBreak">Short break</label>
+    <input type="number" id="pomodoroBreak" min="1" max="60" step="1">
+  </div>
+  <div class="row">
+    <label for="pomodoroLongBreak">Long break</label>
+    <input type="number" id="pomodoroLongBreak" min="1" max="120" step="1">
+  </div>
+  <div class="row">
+    <label for="pomodoroLongEvery">Long break after<span class="hint">Number of work blocks.</span></label>
+    <input type="number" id="pomodoroLongEvery" min="1" max="12" step="1">
+  </div>
+</section>
+
+<section>
+  <h2>Looking after you</h2>
+  <div class="row">
+    <label for="drowsyAfter">Pip gets drowsy after<span class="hint">Minutes of unbroken work.</span></label>
+    <input type="number" id="drowsyAfter" min="5" max="600" step="1">
+  </div>
+  <div class="row">
+    <label for="exhaustedAfter">Pip gets exhausted after<span class="hint">Minutes of unbroken work.</span></label>
+    <input type="number" id="exhaustedAfter" min="5" max="600" step="1">
+  </div>
+  <div class="row">
+    <label for="waterInterval">Water reminder every<span class="hint">Active minutes between reminders.</span></label>
+    <input type="number" id="waterInterval" min="5" max="600" step="1">
+  </div>
+</section>
+
+<section>
+  <h2>Behaviour</h2>
+  <div class="row">
+    <label for="notifications">Notifications<span class="hint">A desktop notification when a Pomodoro block ends.</span></label>
+    <input type="checkbox" id="notifications">
+  </div>
+  <div class="row">
+    <label for="launchAtLogin">Launch at login<span class="hint">Start Pip when you sign in to Windows.</span></label>
+    <input type="checkbox" id="launchAtLogin">
+  </div>
+  <div class="row">
+    <label for="compatibilityMode">Compatibility mode<span class="hint">Turns off hardware acceleration on next launch. Try this if Pip has a black box around him.</span></label>
+    <input type="checkbox" id="compatibilityMode">
+  </div>
+</section>
+
+<section>
+  <h2>Today</h2>
+  <div class="today">
+    <div class="stat"><div class="value" id="statPomodoros">0</div><div class="label">Pomodoros</div></div>
+    <div class="stat"><div class="value" id="statWater">0</div><div class="label">Glasses of water</div></div>
+    <div class="stat"><div class="value" id="statStreak">0m</div><div class="label">Longest stretch</div></div>
+    <div class="stat"><div class="value" id="statMood">-</div><div class="label">Pip&rsquo;s mood</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Pip</h2>
+  <div class="actions">
+    <button type="button" class="primary" data-action="pomodoro-toggle" id="btnPomodoro">Start Pomodoro</button>
+    <button type="button" data-action="water">I drank water</button>
+    <button type="button" data-action="feed">Feed Pip</button>
+    <button type="button" data-action="call">Call Pip</button>
+    <button type="button" data-action="quiet">Quiet for 1 hour</button>
+    <button type="button" data-action="reset-position">Reset position</button>
+  </div>
+  <p class="note">Pip keeps running in the system tray when you close this window. Right-click Pip, or the tray icon, for the same menu.</p>
+</section>
+
+<script src="../src/renderer/palettes.js"></script>
+<script src="../src/renderer/sprites.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>
