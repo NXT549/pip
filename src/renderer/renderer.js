@@ -43,6 +43,9 @@
   /** Above this ground speed Pip is running, not trotting. */
   const RUN_SPEED = 70;            // DIP/s
 
+  /** How far Pip swings behind the pointer while being carried, in radians. */
+  const MAX_SWAY = 0.38;
+
   const CLIMB_SPEED = 46;          // DIP/s up a wall
   const CLIMB_CHANCE = 0.25;       // on bumping a wall while wandering
   const HANG_MS = 2600;
@@ -90,6 +93,7 @@
   let climbUntil = 0;
   let lastClimbSent = false;
   let landedUntil = 0;
+  let sway = 0;                    // dangle angle, eased toward drag speed
 
   let lastDrawKey = '';
   let lastTick = 0;
@@ -321,6 +325,15 @@
     if (!img) return;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
+    // Carried, Pip hangs from the pointer and swings behind the direction of
+    // travel, like anything held by its scruff would.
+    if (sway !== 0) {
+      const pivotX = rect.left + rect.width / 2;
+      const pivotY = rect.top;
+      ctx.translate(pivotX, pivotY);
+      ctx.rotate(sway);
+      ctx.translate(-pivotX, -pivotY);
+    }
     if (body.facing === -1) {
       ctx.translate(rect.left + rect.width, rect.top);
       ctx.scale(-1, 1);
@@ -392,6 +405,7 @@
       Math.round(rect.left * 2), Math.round(rect.top * 2),
       Math.round(rect.width * 2), Math.round(rect.height * 2),
       body.facing, settings.flavor,
+      Math.round(sway * 60),
       particleList.length,
       bubble ? Math.round((bubble.alpha || 1) * 20) + ':' + bubble.text.length : '-',
       pomodoro.running ? Math.round(pomodoro.remainingMs / 250) : '-',
@@ -429,6 +443,14 @@
       Physics.clamp(body, wb);
       drag.samples.push({ x: body.x, y: body.y, t: now });
       if (drag.samples.length > 20) drag.samples.shift();
+
+      const v = Physics.throwVelocity(drag.samples, now);
+      const target = Math.max(-MAX_SWAY, Math.min(MAX_SWAY, -v.vx / 1400));
+      sway += (target - sway) * Math.min(1, dt * 9);
+    } else if (sway !== 0) {
+      // Settle back upright once he is put down.
+      sway += (0 - sway) * Math.min(1, dt * 7);
+      if (Math.abs(sway) < 0.004) sway = 0;
     }
 
     updateClimbing(now, wb);
