@@ -836,6 +836,24 @@ function runApp(store) {
     }
   }
 
+  /**
+   * Which way to storm off in a huff.
+   *
+   * Away from the pointer, except when Pip is already backed up against a
+   * screen edge - scooting into a wall just makes him trot on the spot, which
+   * is exactly what it looked like in practice.
+   */
+  function scootDirection() {
+    let away = world.pipX >= world.cursorX ? 1 : -1;
+    if (overlay && !overlay.isDestroyed()) {
+      const width = overlay.getBounds().width;
+      const edge = Math.max(140, width * 0.08);
+      if (world.pipX <= edge) away = 1;
+      else if (world.pipX >= width - edge) away = -1;
+    }
+    return away;
+  }
+
   /** Trot over to wherever the pointer is. */
   function callPip() {
     if (!overlay || overlay.isDestroyed()) return;
@@ -1051,9 +1069,7 @@ function runApp(store) {
         // Puff up and scoot away from the pointer. The movement has to ride on
         // the reaction itself - a stationary reaction outlasts any wander we
         // could set here and would swallow the scoot entirely.
-        const away = world.cursorX > 0 && world.pipX > 0
-          ? (world.pipX >= world.cursorX ? 1 : -1)
-          : (rng() < 0.5 ? -1 : 1);
+        const away = scootDirection();
         // Run the huff for exactly as long as the sulk animation lasts, so he
         // does not finish scooting in the idle pose.
         react('sulk', Animations.clipDuration('sulk'), { walkDir: away, walkSpeed: brain.BASE_RUN });

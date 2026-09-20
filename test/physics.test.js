@@ -201,3 +201,64 @@ test('throwVelocity ignores samples that share a timestamp', () => {
   ];
   assert.deepStrictEqual(Physics.throwVelocity(samples, 50), { vx: 0, vy: 0 });
 });
+
+/* ------------------------------------------------------------------ *
+ * resolveWalk - the "trotting on the spot" regressions
+ * ------------------------------------------------------------------ */
+
+test('an unreachable target is clamped instead of pinning the walk forever', () => {
+  // Pip's centre cannot go closer to the edge than half his sprite, but the
+  // cursor can. Calling him to x=20 when his floor is x=64 used to leave the
+  // direction pinned at -1 for good: he trotted into the wall in place until
+  // he was dragged away.
+  const bounds = { left: 64, right: 1856 };
+  const body = { x: 64 };
+
+  const out = Physics.resolveWalk(body, 0, 20, bounds, 16);
+
+  assert.strictEqual(out.dir, 0, 'should not keep walking at an unreachable target');
+  assert.strictEqual(out.gotoX, null, 'the target should be given up, not retried forever');
+});
+
+test('a reachable target is still walked to', () => {
+  const bounds = { left: 64, right: 1856 };
+  assert.strictEqual(Physics.resolveWalk({ x: 400 }, 0, 900, bounds, 16).dir, 1);
+  assert.strictEqual(Physics.resolveWalk({ x: 900 }, 0, 400, bounds, 16).dir, -1);
+});
+
+test('arriving clears the target', () => {
+  const bounds = { left: 64, right: 1856 };
+  const out = Physics.resolveWalk({ x: 400 }, 0, 405, bounds, 16);
+  assert.strictEqual(out.dir, 0);
+  assert.strictEqual(out.gotoX, null);
+});
+
+test('Pip does not walk into a wall that has already stopped him', () => {
+  const bounds = { left: 64, right: 1856 };
+  // Pressed against the left wall, still being driven left.
+  assert.strictEqual(Physics.resolveWalk({ x: 64 }, -1, null, bounds, 16).dir, 0);
+  // ...and the right.
+  assert.strictEqual(Physics.resolveWalk({ x: 1856 }, 1, null, bounds, 16).dir, 0);
+  // Walking away from a wall is fine.
+  assert.strictEqual(Physics.resolveWalk({ x: 64 }, 1, null, bounds, 16).dir, 1);
+  // Mid-screen is untouched.
+  assert.strictEqual(Physics.resolveWalk({ x: 900 }, -1, null, bounds, 16).dir, -1);
+});
+
+test('a called Pip standing at the far wall gives up rather than moonwalking', () => {
+  // The whole reported failure, end to end: he is at the left wall and the
+  // cursor is off in the unreachable margin beyond it.
+  const bounds = { left: 64, right: 1856 };
+  let gotoTarget = 8;
+  let body = { x: 64 };
+
+  // Ten seconds of ticks: the direction must not stay pinned.
+  let pinnedTicks = 0;
+  for (let i = 0; i < 300; i++) {
+    const out = Physics.resolveWalk(body, 0, gotoTarget, bounds, 16);
+    gotoTarget = out.gotoX;
+    if (out.dir !== 0) pinnedTicks++;
+  }
+  assert.strictEqual(pinnedTicks, 0, 'Pip kept trying to walk somewhere he cannot stand');
+  assert.strictEqual(gotoTarget, null);
+});

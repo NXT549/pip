@@ -503,16 +503,14 @@
 
     updateClimbing(now, wb);
 
-    // "Call Pip" overrides the wander until he arrives.
+    // "Call Pip" overrides the wander until he arrives. resolveWalk also
+    // refuses to walk into a wall, and abandons a target that cannot be
+    // reached - both of which used to leave Pip trotting on the spot.
     let dir = walkDir;
-    if (gotoX !== null && body.grounded && !drag && !body.climbing) {
-      const delta = gotoX - body.x;
-      if (Math.abs(delta) < settings.scale * 4) {
-        gotoX = null;
-        dir = 0;
-      } else {
-        dir = delta > 0 ? 1 : -1;
-      }
+    if (body.grounded && !drag && !body.climbing) {
+      const walk = Physics.resolveWalk(body, walkDir, gotoX, wb, settings.scale * 4);
+      dir = walk.dir;
+      gotoX = walk.gotoX;
     }
 
     const opts = {};

@@ -202,10 +202,56 @@ function throwVelocity(samples, now) {
   return { vx: vx, vy: vy };
 }
 
+
+/**
+ * Work out which way Pip should walk this frame.
+ *
+ * Two things here exist because of real misbehaviour:
+ *
+ * 1. A "go here" target is clamped into the walkable range first. The cursor
+ *    can sit closer to the screen edge than Pip's own half-width, and an
+ *    unreachable target pinned the walk direction forever - he trotted into
+ *    the wall in place until he was dragged away.
+ * 2. Walking into a wall that has already stopped him looks broken, so the
+ *    drive is dropped and the target abandoned; the wander picks a new
+ *    direction shortly after.
+ *
+ * @param {object} body
+ * @param {number} walkDir       -1 | 0 | 1 from the brain
+ * @param {number|null} gotoX    target x, or null
+ * @param {object} bounds        {left, right, ...}
+ * @param {number} arriveWithin  how close counts as arrived, in DIPs
+ * @returns {{dir:number, gotoX:number|null}}
+ */
+function resolveWalk(body, walkDir, gotoX, bounds, arriveWithin) {
+  let dir = walkDir;
+  let target = gotoX === undefined ? null : gotoX;
+
+  if (target !== null) {
+    const reachable = Math.max(bounds.left, Math.min(bounds.right, target));
+    const delta = reachable - body.x;
+    if (Math.abs(delta) < arriveWithin) {
+      target = null;
+      dir = 0;
+    } else {
+      dir = delta > 0 ? 1 : -1;
+    }
+  }
+
+  const intoLeftWall = dir < 0 && body.x <= bounds.left + 0.5;
+  const intoRightWall = dir > 0 && body.x >= bounds.right - 0.5;
+  if (intoLeftWall || intoRightWall) {
+    dir = 0;
+    target = null;
+  }
+
+  return { dir: dir, gotoX: target };
+}
+
 const Physics = {
   GRAVITY, MAX_FALL, BOUNCE, MIN_BOUNCE, FRICTION, MAX_THROW,
   SQUASH_MIN, SQUASH_MAX,
-  createBody, isValidPosition, respawn, clamp, step, throwVelocity
+  createBody, isValidPosition, respawn, clamp, step, throwVelocity, resolveWalk
 };
 
 if (typeof window !== 'undefined') {
