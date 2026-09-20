@@ -195,3 +195,30 @@ test('frameAt walks a clip and reports when it is done', () => {
     });
   }
 });
+
+test('the face never breaks the silhouette', () => {
+  // The face is placed by offset, so on narrower poses a blush or mouth pixel
+  // could land where the outline should be and punch a notch in Pip's edge -
+  // it affected 27 of the frames before this was caught by eye. `W` is left
+  // out on purpose: it doubles as the nightcap's bobble, which sits outside
+  // the body by design.
+  const FACE = ['E', 'K', 'M'];
+  const broken = [];
+
+  for (const name of Sprites.FRAME_NAMES) {
+    const frame = Sprites.FRAMES[name];
+    for (let r = 1; r < Sprites.FRAME_SIZE - 1; r++) {
+      for (let c = 1; c < Sprites.FRAME_SIZE - 1; c++) {
+        if (FACE.indexOf(frame[r][c]) === -1) continue;
+        const exposed =
+          frame[r][c + 1] === '.' || frame[r][c - 1] === '.' ||
+          frame[r - 1][c] === '.' || frame[r + 1][c] === '.';
+        if (exposed) broken.push(name + ' at ' + r + ',' + c + ' (' + frame[r][c] + ')');
+      }
+    }
+  }
+
+  assert.deepStrictEqual(broken, [],
+    'these face pixels sit on the silhouette edge instead of inside it:\n  ' +
+    broken.join('\n  '));
+});

@@ -377,6 +377,22 @@ function composeFrame(spec) {
     MOUTH_STYLES[face.mouth](g, eyeRow + 4, farEyeCol + 2);
   }
 
+  // ---- keep the silhouette intact -----------------------------------
+  // The face is placed by offset, so on narrower poses a blush or a mouth
+  // pixel can land on the body's own outline and punch a notch in Pip's
+  // edge. The outline always wins; the face is only ever drawn inside it.
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const ch = g[r][c];
+      if (ch !== 'E' && ch !== 'W' && ch !== 'K' && ch !== 'M') continue;
+      if (nearOutline[r][c] || farOutline[r][c]) g[r][c] = 'O';
+      // ...and a face pixel that missed the body altogether is dropped rather
+      // than left floating in the air beside Pip. Props are drawn after this,
+      // so a nightcap bobble outside the body is unaffected.
+      else if (!near[r][c]) g[r][c] = T;
+    }
+  }
+
   // ---- props --------------------------------------------------------
   for (const p of spec.props || []) {
     if (!PROPS[p.name]) throw new Error('unknown prop: ' + p.name);

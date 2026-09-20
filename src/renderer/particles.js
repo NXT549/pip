@@ -68,11 +68,15 @@ const SHAPES = {
     '.X...',
     'XXXXX'
   ],
+  // A teardrop: pointed at the top, heavy at the bottom. The earlier shape
+  // was symmetrical and read as a plus sign rather than a falling drop.
   drop: [
-    '.X.',
-    'XXX',
-    'XoX',
-    '.X.'
+    '..X..',
+    '..X..',
+    '.XXX.',
+    'XXXXX',
+    'XoXXX',
+    '.XXX.'
   ],
   star: [
     '..X..',
