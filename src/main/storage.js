@@ -60,9 +60,7 @@ const DEFAULTS = {
     pomodoros: 0,
     water: 0,
     longestStreakMs: 0
-  },
-
-  lastPosition: null          // {x, y} in DIPs, or null
+  }
 };
 
 /** Deep-merge `saved` over `defaults`, keeping only keys defaults knows about. */

@@ -45,7 +45,21 @@ test('every animation clip is actually reachable', () => {
 });
 
 test('every speech situation has a caller', () => {
-  const dead = Lines.SITUATIONS.filter((s) => !mainSrc.includes("'" + s + "'"));
+  // Match an actual say() call. A bare substring search passes on unrelated
+  // matches - 'dizzy' also appears as a clip name and a reaction duration,
+  // which hid the fact that it was never spoken.
+  //
+  // The onboarding lines are the one legitimate indirection: they are held in
+  // a table and fed to say() by index, so the table is parsed and checked to
+  // be wired rather than being waved through.
+  const table = mainSrc.match(/const ONBOARDING = \[([^\]]*)\]/);
+  assert.ok(table, 'the ONBOARDING sequence table has gone missing');
+  assert.ok(/say\(\s*ONBOARDING\[/.test(mainSrc),
+    'ONBOARDING is declared but never passed to say()');
+  const viaTable = [...table[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+
+  const dead = Lines.SITUATIONS.filter((s) =>
+    !new RegExp("say\\(\\s*'" + s + "'").test(mainSrc) && !viaTable.includes(s));
   assert.deepStrictEqual(dead, [],
     'these situations have lines written but are never said: ' + dead.join(', '));
 });

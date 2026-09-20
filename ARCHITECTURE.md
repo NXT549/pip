@@ -272,12 +272,12 @@ Only these names exist. `preload.js` enforces the list.
 |---|---|
 | `pip:settings` | `{ flavor, scale, activityLevel, quiet, nightcap, dev }` |
 | `pip:bounds` | `{ left, top, right, bottom, width, height }` — overlay DIPs |
-| `pip:state` | `{ state, clip, walkDir, walkSpeed, facing? }` |
+| `pip:state` | `{ state, clip, walkDir, walkSpeed }` |
 | `pip:cursor` | `{ x, y, inside }` — overlay-relative DIPs |
 | `pip:say` | `{ text, ms }` |
 | `pip:particles` | `{ kind, count }` |
 | `pip:pomodoro` | `{ running, phase, remainingMs, totalMs }` |
-| `pip:goto` | `{ x }` — trot to this overlay x |
+| `pip:goto` | `{ x }` — trot to this overlay x; `x: null` cancels |
 | `pip:reset` | *(none)* |
 
 ### renderer → main
@@ -288,10 +288,11 @@ Only these names exist. `preload.js` enforces the list.
 | `pip:set-interactive` | `{ interactive: boolean }` |
 | `pip:grabbed` | `{}` |
 | `pip:dropped` | `{ x, y }` |
-| `pip:click` | `{ kind: 'single'\|'double', x, y }` |
+| `pip:click` | `{ x, y }` — one message per physical click; main classifies the pattern via `clicks.js` |
 | `pip:pet` | `{}` — cursor rested on Pip for ~1s |
 | `pip:startle` | `{}` — fast jerky cursor movement nearby |
 | `pip:climb` | `{ climbing: boolean }` |
+| `pip:battery` | `{ level: 0..1, charging: boolean }` — Electron cannot read this, so the renderer reports it |
 | `pip:context-menu` | `{ x, y }` |
 | `pip:error` | `{ message, stack }` |
 

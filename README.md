@@ -101,7 +101,10 @@ npm run smoke
 `npm test` runs the unit tests on Node's built-in runner — state priority, work
 accumulation and break resets, Pomodoro transitions and restart recovery, water
 scheduling and the midnight reset, mood, click patterns, physics, storage,
-sprite validation and palette completeness.
+sprite validation and palette completeness. It also runs a wiring check that
+fails if any animation clip, speech situation or particle kind is unreachable,
+if an IPC channel is known to only one side, or if a menu action has no
+handler — the kind of dead wiring that reads fine in a single file.
 
 `npm run smoke` launches the **real app** with `--smoke`: it draws its first
 frame, plays every animation clip in every flavour offscreen, opens and closes
@@ -234,15 +237,16 @@ cost in CPU.
 
 **Pip has disappeared.**
 Use **Reset position** from the tray menu. He will drop back in from the top of
-the primary display. This also covers the case where a monitor was unplugged
-while he was standing on it.
+the display he was last on, with the overlay refitted to that display's work
+area. If that monitor has been unplugged, Pip falls back to the primary one.
 
 **Pip falls asleep while I am watching a video.**
 Pip measures activity with the system idle timer, which counts keyboard and
 mouse input. Watching a video without touching anything looks exactly like
-being away, so he curls up. Nudge the mouse and he will wake up and greet you.
-If it bothers you, turn the activity level up, or hide him from the tray while
-you watch.
+being away, so after five minutes he curls up. Nudge the mouse and he wakes and
+greets you. There is no setting for this — the five-minute threshold is fixed,
+and the activity level only changes how often he wanders, not when he sleeps.
+If it bothers you, hide him from the tray while you watch.
 
 **Pip is in the way.**
 Drag him somewhere else, or **Hide Pip** from the tray. **Quiet mode for 1

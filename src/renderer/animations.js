@@ -15,10 +15,10 @@
 'use strict';
 
 const CLIPS = {
-  // breathing bob with a blink woven in
+  // breathing bob, a blink, and a small happy wiggle
   idle: {
-    frames: ['idle_0', 'idle_1', 'idle_blink', 'idle_2', 'idle_3'],
-    durations: [700, 700, 120, 700, 700],
+    frames: ['idle_0', 'idle_1', 'idle_blink', 'idle_2', 'idle_wiggle_a', 'idle_wiggle_b', 'idle_3'],
+    durations: [700, 700, 120, 700, 180, 180, 700],
     loop: true,
     next: null
   },

@@ -28,7 +28,7 @@ const OUTBOUND = [
   'pip:set-interactive', // {interactive:boolean}
   'pip:grabbed',         // {}
   'pip:dropped',         // {x, y} in overlay DIPs
-  'pip:click',           // {kind:'single'|'double', x, y}
+  'pip:click',           // {x, y} - main classifies the pattern
   'pip:pet',             // {} - cursor rested on Pip for ~1s
   'pip:startle',         // {} - fast jerky cursor movement nearby
   'pip:climb',           // {climbing:boolean}

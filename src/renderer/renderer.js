@@ -46,7 +46,7 @@
   /** How far Pip swings behind the pointer while being carried, in radians. */
   const MAX_SWAY = 0.38;
 
-  const CLIMB_SPEED = 46;          // DIP/s up a wall
+  const CLIMB_SPEED = 130;         // DIP/s up a wall
   const CLIMB_CHANCE = 0.25;       // on bumping a wall while wandering
   const HANG_MS = 2600;
 
@@ -69,6 +69,16 @@
   let clipStart = 0;
   let currentFrame = Sprites.FRAME_NAMES[0];
   let pipState = 'idle';
+  /**
+   * What main last told us to play, and what we are playing instead.
+   *
+   * Main only sends pip:state when its own decision changes, so anything the
+   * renderer substitutes locally (falling, landing, walking) has to be undone
+   * here - otherwise a thirsty Pip who gets dropped stands in the plain idle
+   * pose forever, because main has no idea the clip was ever replaced.
+   */
+  let commandedClip = 'idle';
+  let localClip = null;
 
   let walkDir = 0;
   let walkSpeed = 0;
@@ -82,8 +92,6 @@
   let lastStartleAt = 0;
 
   let drag = null;
-  let lastClickAt = 0;
-  let pendingClickTimer = null;
 
   let particleList = [];
   let bubble = null;
@@ -91,6 +99,8 @@
   let battery = null;              // {level, charging} once known
 
   let climbUntil = 0;
+  let climbTargetY = 0;
+  let hangUntil = 0;
   let lastClimbSent = false;
   let landedUntil = 0;
   let sway = 0;                    // dangle angle, eased toward drag speed
@@ -223,12 +233,31 @@
     clipStart = now;
   }
 
+  /** Play `name` instead of whatever main asked for, remembering to go back. */
+  function setLocalClip(name, now) {
+    if (!Animations.CLIPS[name]) return;
+    localClip = name;
+    setClip(name, now);
+  }
+
+  /** Hand control back to main's decision. */
+  function clearLocalClip(now) {
+    if (!localClip) return;
+    localClip = null;
+    setClip(commandedClip, now);
+  }
+
   function advanceAnimation(now) {
     const res = Animations.frameAt(clip, now - clipStart);
     if (res.frame) currentFrame = res.frame;
     if (res.done) {
-      const next = Animations.CLIPS[clip] && Animations.CLIPS[clip].next;
-      if (next) setClip(next, now);
+      if (localClip && clip === localClip) {
+        // A landing or a get-up has played out; go back to what Pip was doing.
+        clearLocalClip(now);
+      } else {
+        const next = Animations.CLIPS[clip] && Animations.CLIPS[clip].next;
+        if (next) setClip(next, now);
+      }
     }
     applyLook();
     applyNightcap();
@@ -266,6 +295,13 @@
    * Climbing
    * ---------------------------------------------------------------- */
 
+  /**
+   * Climb, hang, drop.
+   *
+   * Pip picks a target height when he starts up the wall rather than always
+   * making for the very top - a full-height climb on a 1080p screen takes
+   * twenty seconds and he would let go long before the hang ever began.
+   */
   function updateClimbing(now, wb) {
     if (drag || body.held) {
       if (body.climbing) stopClimb();
@@ -273,16 +309,19 @@
     }
 
     if (body.climbing) {
-      if (now >= climbUntil) {
-        // Let go and drop.
-        stopClimb();
-        body.vy = 0;
-        return;
-      }
-      if (body.y <= wb.top + 4) {
-        // Reached the top - hang there for a moment.
+      if (body.y <= climbTargetY) {
+        // Made it. Hang here for a bit, then let go.
         body.vy = 0;
         setClip('hang', now);
+        if (!hangUntil) hangUntil = now + HANG_MS;
+        if (now >= hangUntil) {
+          stopClimb();
+          body.vy = 0;
+        }
+      } else if (now >= climbUntil) {
+        // Gave up part way; drop from here.
+        stopClimb();
+        body.vy = 0;
       } else {
         setClip('climb', now);
       }
@@ -299,11 +338,17 @@
     body.climbing = atLeft ? 'left' : 'right';
     body.facing = atLeft ? -1 : 1;
     body.vy = -CLIMB_SPEED;
-    climbUntil = now + HANG_MS + 2600;
+    // Somewhere in the upper half of the screen, never above the ceiling.
+    const span = wb.bottom - wb.top;
+    climbTargetY = Math.max(wb.top + 4, wb.bottom - span * (0.45 + Math.random() * 0.45));
+    // A generous ceiling on the attempt, in case something blocks progress.
+    climbUntil = now + 20000;
+    hangUntil = 0;
     sendClimb(true);
   }
 
   function stopClimb() {
+    hangUntil = 0;
     if (!body.climbing) return;
     body.climbing = null;
     sendClimb(false);
@@ -406,7 +451,9 @@
       Math.round(rect.width * 2), Math.round(rect.height * 2),
       body.facing, settings.flavor,
       Math.round(sway * 60),
-      particleList.length,
+      // particle positions change every tick, so the count alone is not
+      // enough - repaint while anything is in flight
+      particleList.length ? 'fx' + Math.round(lastTick) : '-',
       bubble ? Math.round((bubble.alpha || 1) * 20) + ':' + bubble.text.length : '-',
       pomodoro.running ? Math.round(pomodoro.remainingMs / 250) : '-',
       battery ? Math.round(battery.level * 50) + (battery.charging ? 'c' : '') : '-'
@@ -473,26 +520,35 @@
     }
     const events = Physics.step(body, dt, wb, opts);
     if (events.respawned) notify('pip:error', { message: 'position was invalid, respawned' });
+    // physics.js can end a climb by itself (reaching the floor), so re-sync
+    // rather than leaving main convinced Pip is still on the wall.
+    if (!body.climbing && lastClimbSent) sendClimb(false);
     if (events.landed) {
       // A gentle touchdown squashes and carries on; a real thump knocks Pip
       // flat and he has to pick himself up again.
       if (events.speed > 900) {
-        setClip('getup', now);
+        setLocalClip('getup', now);
         Particles.spawn(particleList, 'star', body.x, body.y - settings.scale * 18, 3);
       } else if (events.speed > 260) {
-        setClip('land', now);
+        setLocalClip('land', now);
       }
       if (events.speed > 420) Particles.spawn(particleList, 'sparkle', body.x, body.y, 2);
       landedUntil = now + 500;
     }
 
     // Walking should look like walking even when the brain says idle, but a
-    // landing gets to play out first.
+    // landing gets to play out first. Everything here is a local override:
+    // it is handed back to main's clip the moment it stops applying.
     if (!body.climbing && !drag && now >= landedUntil) {
-      if (!body.grounded && body.vy > 120) setClip('fall', now);
-      else if (dir !== 0 && body.grounded && pipState === 'idle') {
+      if (!body.grounded && body.vy > 120) {
+        setLocalClip('fall', now);
+      } else if (dir !== 0 && body.grounded && pipState === 'idle') {
         // Anything brisker than a stroll reads as a run.
-        setClip(Math.abs(body.vx) > RUN_SPEED ? 'run' : 'walk', now);
+        setLocalClip(Math.abs(body.vx) > RUN_SPEED ? 'run' : 'walk', now);
+      } else if (localClip && (localClip === 'walk' || localClip === 'run' || localClip === 'fall')
+                 && body.grounded && dir === 0) {
+        // Stopped, and the looping override would otherwise run forever.
+        clearLocalClip(now);
       }
     }
 
@@ -623,24 +679,20 @@
     if (wasDrag) {
       notify('pip:dropped', { x: body.x, y: body.y });
     } else {
-      handleClick(e.clientX, e.clientY, now);
+      handleClick(e.clientX, e.clientY);
     }
     updateHover();
   });
 
-  function handleClick(x, y, now) {
-    const isDouble = now - lastClickAt < 320;
-    lastClickAt = now;
-    if (isDouble) {
-      if (pendingClickTimer) { clearTimeout(pendingClickTimer); pendingClickTimer = null; }
-      notify('pip:click', { kind: 'double', x: x, y: y });
-      return;
-    }
-    // Hold the single click briefly so a double click does not also fire one.
-    pendingClickTimer = setTimeout(() => {
-      pendingClickTimer = null;
-      notify('pip:click', { kind: 'single', x: x, y: y });
-    }, 320);
+  /**
+   * Report every physical click and let main decide what the pattern was.
+   *
+   * The renderer used to coalesce these itself, which meant five fast clicks
+   * arrived as four "double" messages and the rapid-click reaction could never
+   * fire. src/main/clicks.js owns that judgement now - it is pure and tested.
+   */
+  function handleClick(x, y) {
+    notify('pip:click', { x: x, y: y });
   }
 
   window.addEventListener('contextmenu', (e) => {
@@ -662,14 +714,22 @@
 
   bridge.on('pip:bounds', (b) => {
     bounds = Object.assign({}, bounds, b);
+    const before = dpr;
     resizeCanvas();
+    // Frames bake scale * devicePixelRatio, so moving to a 200% monitor (or
+    // changing scaling live) means the cache has to be rebuilt.
+    if (dpr !== before) prerender();
     Physics.clamp(body, worldBounds());
   });
 
   bridge.on('pip:state', (s) => {
     const now = performance.now();
     pipState = s.state || 'idle';
-    if (s.clip) setClip(s.clip, now);
+    if (s.clip) {
+      commandedClip = s.clip;
+      // A local override owns the clip until it finishes.
+      if (!localClip) setClip(commandedClip, now);
+    }
     if (typeof s.walkDir === 'number') walkDir = s.walkDir;
     if (typeof s.walkSpeed === 'number') walkSpeed = s.walkSpeed;
     sleeping = s.state === 'sleeping';
@@ -704,8 +764,9 @@
   });
 
   bridge.on('pip:goto', (p) => {
-    if (!p || typeof p.x !== 'number') return;
-    gotoX = p.x;
+    if (!p) return;
+    // x:null means "stop chasing" - Pip gives up and goes back to pottering.
+    gotoX = typeof p.x === 'number' ? p.x : null;
   });
 
   bridge.on('pip:reset', () => {
@@ -793,6 +854,17 @@
           const layout = Bubbles.layout(b, spriteRect(),
             { width: bounds.width, height: bounds.height }, ctx);
           Bubbles.draw(ctx, b, layout);
+
+          // Exercise the real composite path too, with and without effects,
+          // so a reference error in draw() cannot slip past the smoke test.
+          bubble = b;
+          Particles.spawn(particleList, 'heart', body.x, body.y, 2);
+          lastDrawKey = '';
+          draw();
+          particleList = [];
+          bubble = null;
+          lastDrawKey = '';
+          draw();
         } catch (err) {
           errors.push(flavor + ': ' + (err && err.message));
         }

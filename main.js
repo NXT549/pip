@@ -26,6 +26,7 @@ const reminders = require('./src/main/reminders.js');
 const mood = require('./src/main/mood.js');
 const clicks = require('./src/main/clicks.js');
 const Lines = require('./src/renderer/lines.js');
+const Bubbles = require('./src/renderer/bubbles.js');
 
 /* ------------------------------------------------------------------ *
  * Flags and paths
@@ -127,9 +128,12 @@ function runApp(store) {
     lastState: null,
     lastTooltip: '',
     nightcap: false,
+    systemAsleep: false,    // suspended or locked - outranks the idle timer
+    onboardingDone: false,
     saidFatigue: null,      // 'drowsy' | 'exhausted', so each is said once per stretch
     batteryWarnedAt: 0,
     chasingUntil: 0,
+    lastChaseSendAt: 0,
     onboardingStep: -1
   };
 
@@ -137,6 +141,7 @@ function runApp(store) {
   let brainTimer = null;
   let idleTimer = null;
   let onboardingTimer = null;
+  let singleClickTimer = null;
 
   /** The clock everything reads, so the debug panel can push it forward. */
   const now = () => Date.now() + world.clockOffset;
@@ -219,7 +224,7 @@ function runApp(store) {
   function say(situation, essential) {
     const t = now();
     if (t < store.get('quietUntil')) return;
-    if (!essential && t - world.lastBubbleAt < scaled(120000)) return;
+    if (!essential && t - world.lastBubbleAt < scaled(Bubbles.CHATTER_COOLDOWN_MS)) return;
 
     const text = Lines.pick(situation, {
       mood: store.get('mood'),
@@ -275,17 +280,18 @@ function runApp(store) {
     world.nextBehaviorAt = t + spread;
 
     const roll = rng();
-    if (roll < 0.12 && t >= world.chasingUntil) {
+    if (roll < 0.15 && t >= world.chasingUntil) {
       // Give the pointer a run for its money instead of a set-piece.
       chaseCursor(t);
       return;
     }
-    // Only actually play one some of the time, so Pip is not constantly performing.
-    if (roll < 0.62) {
+    // Every elapsed timer produces a behaviour, so the cadence really is the
+    // 20-90s the interval says rather than some multiple of it.
+    if (roll < 0.9) {
       const clip = pickBehavior();
       world.behavior = { clip: clip, until: t + scaled(BEHAVIOR_LENGTH_MS) };
       if (clip === 'nap') particles('zzz', 3);
-    } else if (roll > 0.9) {
+    } else {
       // A passing remark, coloured by how Pip is feeling. The chatter
       // cooldown in say() keeps this from becoming a running commentary.
       const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), t));
@@ -320,8 +326,26 @@ function runApp(store) {
    */
   function chaseCursor(t) {
     world.chasingUntil = t + scaled(4000);
+    world.lastChaseSendAt = 0;
     callPip();
     say('bored');
+  }
+
+  /**
+   * While a chase is running, keep re-aiming at the pointer so Pip actually
+   * follows it rather than trotting to where it was four seconds ago. When
+   * the chase times out he simply stops - that is the giving up.
+   */
+  function updateChase(t) {
+    if (!world.chasingUntil) return;
+    if (t >= world.chasingUntil) {
+      world.chasingUntil = 0;
+      send('pip:goto', { x: null });
+      return;
+    }
+    if (t - world.lastChaseSendAt < 400) return;
+    world.lastChaseSendAt = t;
+    callPip();
   }
 
   /* ---------------------------------------------------------------- *
@@ -368,6 +392,10 @@ function runApp(store) {
         say('pomodoro_done', true);
         notify('Nice focus!', 'That is one Pomodoro done. Time for a break.');
         bumpMood('pomodoro');
+        // Once the confetti has cleared, tell them what the break is for.
+        setTimeout(() => {
+          if (!quitting) say('break_start', true);
+        }, scaled(CELEBRATE_MS) + 600);
       } else {
         say('break_over', true);
         notify('Break over', 'Back to it when you are ready.');
@@ -418,9 +446,11 @@ function runApp(store) {
       persistStreak();
     }
 
-    // Away for five minutes or more and Pip curls up.
+    // Away for five minutes or more and Pip curls up. A suspended or locked
+    // machine stays asleep regardless of what the idle counter says - right
+    // after a lock it reads near zero, which used to wake Pip straight back up.
     const wasAsleep = world.asleep;
-    if (!world.held) world.asleep = idleSeconds >= 300;
+    if (!world.held) world.asleep = world.systemAsleep || idleSeconds >= 300;
     if (wasAsleep && !world.asleep) onWakeUp();
 
     if (!world.asleep) {
@@ -471,15 +501,18 @@ function runApp(store) {
     particles('sparkle', 5);
   }
 
+  /**
+   * The first activity of the day gets a stretch whenever it happens - if you
+   * start work at one in the afternoon you still get the stretch, you just do
+   * not get told good morning.
+   */
   function maybeGoodMorning() {
     const t = now();
-    const hour = new Date(t).getHours();
-    if (hour < 5 || hour > 11) return;
     const key = reminders.localDateKey(t);
     if (store.get('lastGoodMorning') === key) return;
     store.set({ lastGoodMorning: key });
     world.behavior = { clip: 'stretch', until: t + scaled(BEHAVIOR_LENGTH_MS) };
-    say('good_morning', true);
+    if (new Date(t).getHours() < 12) say('good_morning', true);
   }
 
   function maybeLateNight() {
@@ -721,7 +754,6 @@ function runApp(store) {
         const state = store.get('pomodoro');
         if (state.phase === 'off') {
           store.set({ pomodoro: pomodoro.start(state, now(), pomodoroCfg()) });
-          say('break_start', true);
         } else {
           store.set({ pomodoro: pomodoro.stop(state) });
         }
@@ -808,6 +840,7 @@ function runApp(store) {
     for (const t of [cursorTimer, brainTimer, idleTimer, onboardingTimer]) {
       if (t) clearInterval(t);
     }
+    if (singleClickTimer) clearTimeout(singleClickTimer);
     persistStreak();
     if (tray && !tray.isDestroyed()) tray.destroy();
     app.quit();
@@ -856,6 +889,7 @@ function runApp(store) {
 
       if (isNightcapHour() !== world.nightcap) sendSettings();
       announceFatigue(t, s);
+      updateChase(t);
       if (world.reaction && t >= world.reaction.until) world.reaction = null;
       if (world.behavior && t >= world.behavior.until) world.behavior = null;
       if (!world.asleep && !world.held) maybeStartBehavior();
@@ -916,7 +950,10 @@ function runApp(store) {
   ];
 
   function runOnboarding() {
-    if (store.get('onboarded')) return;
+    // pip:ready fires again after a renderer reload, which would otherwise
+    // start a second interval and orphan the first.
+    if (world.onboardingDone || onboardingTimer) return;
+    if (store.get('onboarded')) { world.onboardingDone = true; return; }
     world.onboardingStep = 0;
     // Pip has just dropped in and landed; wave, then talk you through it.
     world.behavior = { clip: 'wave', until: now() + scaled(3000) };
@@ -924,6 +961,7 @@ function runApp(store) {
       if (world.onboardingStep >= ONBOARDING.length) {
         clearInterval(onboardingTimer);
         onboardingTimer = null;
+        world.onboardingDone = true;
         store.set({ onboarded: true });
         logger.info('onboarding shown');
         return;
@@ -964,6 +1002,7 @@ function runApp(store) {
       world.held = false;
       react('dizzy');
       particles('star', 4);
+      say('dizzy');
       // Follow the cursor to whichever display Pip was let go over.
       try {
         const point = screen.getCursorScreenPoint();
@@ -974,34 +1013,48 @@ function runApp(store) {
       }
     });
 
-    ipcMain.on('pip:click', (_e, payload) => {
+    ipcMain.on('pip:click', () => {
       const res = clicks.record(world.clicks, now());
       world.clicks = res.state;
-      const pattern = payload.kind === 'double' ? 'double' : res.pattern;
+
+      // Every reaction waits a beat before it fires, because a faster pattern
+      // may still be coming: clicking five times is also two double-clicks,
+      // and Pip should end up annoyed rather than fed twice on the way there.
+      const defer = (ms, run) => {
+        if (singleClickTimer) clearTimeout(singleClickTimer);
+        singleClickTimer = setTimeout(() => {
+          singleClickTimer = null;
+          if (!quitting) run();
+        }, ms);
+      };
 
       if (res.pattern === 'rapid') {
+        if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
         react('sulk');
         say('annoyed', true);
         // Puff up and scoot away from where the pointer is.
         world.wander = { dir: rng() < 0.5 ? -1 : 1, until: now() + 1400, moving: true };
         return;
       }
-      if (pattern === 'double') {
-        react('eat');
-        particles('sparkle', 4);
-        say('snack', true);
-        bumpMood('snack');
+
+      if (res.pattern === 'double') {
+        defer(clicks.RAPID_MS / 4, () => {
+          react('eat');
+          particles('sparkle', 4);
+          say('snack', true);
+          bumpMood('snack');
+        });
         return;
       }
-      // A thirsty Pip takes a click as "yes, I drank some".
-      if (world.thirsty) {
-        doAction('water');
-        return;
-      }
-      const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now()));
-      react(band === 'high' ? 'laugh' : 'happy');
-      particles('heart', 2);
-      say('click');
+
+      defer(clicks.DOUBLE_MS + 40, () => {
+        // A thirsty Pip takes a click as "yes, I drank some".
+        if (world.thirsty) { doAction('water'); return; }
+        const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now()));
+        react(band === 'high' ? 'laugh' : 'happy');
+        particles('heart', 2);
+        say('click');
+      });
     });
 
     ipcMain.on('pip:pet', () => {
@@ -1088,15 +1141,20 @@ function runApp(store) {
     screen.on('display-removed', refit);
 
     const sleep = (why) => {
+      world.systemAsleep = true;
       world.asleep = true;
       world.reminders = reminders.onBreakEvent(world.reminders, now());
       persistStreak();
       logger.info(why);
     };
+    // Windows fires resume AND unlock-screen for one wake, so only the first
+    // of the pair actually greets you.
     const wake = (why) => {
+      const wasAsleep = world.asleep;
+      world.systemAsleep = false;
       world.asleep = false;
       logger.info(why);
-      onWakeUp();
+      if (wasAsleep) onWakeUp();
     };
 
     powerMonitor.on('suspend', () => sleep('system suspend'));
@@ -1202,6 +1260,9 @@ function runApp(store) {
   app.whenReady().then(() => {
     // Recover a Pomodoro that was running when Pip was last closed.
     store.set({ pomodoro: pomodoro.restore(store.get('pomodoro'), now(), pomodoroCfg()) });
+    // Without a baseline, decay never starts and mood sits at its default
+    // until the first time Pip is petted or fed.
+    if (!store.get('moodUpdatedAt')) store.set({ moodUpdatedAt: now() });
     rollDayIfNeeded();
     applyLoginItem();
 

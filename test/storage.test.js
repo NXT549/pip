@@ -102,13 +102,17 @@ test('a nested object replaced by a scalar falls back wholesale', (t) => {
   assert.deepStrictEqual(data.pomodoro, DEFAULTS.pomodoro);
 });
 
-test('a nullable default still accepts a real value', (t) => {
-  const dir = tempDir(t);
-  writeData(dir, { lastPosition: { x: 12, y: 34 } });
+test('a nullable default still accepts a real value', () => {
+  // Exercised against a fixture rather than a production key, so the check
+  // survives defaults being added or removed.
+  const defaults = { position: null, name: 'pip' };
 
-  const data = createStorage(dir, fakeLog()).load();
+  assert.deepStrictEqual(
+    mergeDefaults(defaults, { position: { x: 12, y: 34 } }),
+    { position: { x: 12, y: 34 }, name: 'pip' });
 
-  assert.deepStrictEqual(data.lastPosition, { x: 12, y: 34 });
+  // ...and falls back when the saved file has nothing for it.
+  assert.deepStrictEqual(mergeDefaults(defaults, {}), { position: null, name: 'pip' });
 });
 
 test('mergeDefaults handles rubbish without throwing', () => {

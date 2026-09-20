@@ -50,9 +50,9 @@ const PAUSE_MAX = 7000;
  * Lower means "more often" for the pause length.
  */
 const ACTIVITY = {
-  calm: { pause: 1.6, wander: 0.7, speed: 0.85 },
-  normal: { pause: 1.0, wander: 1.0, speed: 1.0 },
-  hyper: { pause: 0.55, wander: 1.35, speed: 1.2 }
+  calm: { pause: 1.6, wander: 0.7, speed: 0.85, dash: 0.08 },
+  normal: { pause: 1.0, wander: 1.0, speed: 1.0, dash: 0.18 },
+  hyper: { pause: 0.55, wander: 1.35, speed: 1.2, dash: 0.34 }
 };
 
 function pick(rng, min, max) {
@@ -150,7 +150,9 @@ function decide(input) {
     return {
       dir: rng() < 0.5 ? -1 : 1,
       until: now + pick(rng, WANDER_MIN, WANDER_MAX) * activity.wander,
-      moving: true
+      moving: true,
+      // Now and then Pip does not stroll, he bolts.
+      dash: rng() < activity.dash && mood >= 40
     };
   };
 
@@ -198,9 +200,9 @@ function decide(input) {
   if (wander.moving && pace > 0) {
     return {
       state: 'idle',
-      clip: 'walk',
+      clip: wander.dash ? 'run' : 'walk',
       walkDir: wander.dir,
-      walkSpeed: BASE_WALK * pace,
+      walkSpeed: (wander.dash ? BASE_RUN : BASE_WALK) * pace,
       wander: wander
     };
   }
