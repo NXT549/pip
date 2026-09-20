@@ -105,6 +105,19 @@
   let landedUntil = 0;
   let sway = 0;                    // dangle angle, eased toward drag speed
 
+  /**
+   * Trotting-on-the-spot detector.
+   *
+   * The walk cycle playing while Pip does not actually move is a real bug
+   * that has now been reported twice, and it is invisible to every test we
+   * have. So Pip watches for it himself and reports his whole state when it
+   * happens - once per episode, so it cannot spam the log.
+   */
+  let stuckCheckAt = 0;
+  let stuckLastX = 0;
+  let stuckFor = 0;
+  let stuckReported = false;
+
   let lastDrawKey = '';
   let lastTick = 0;
   let sleeping = false;
@@ -555,6 +568,8 @@
       }
     }
 
+    checkStuck(now, dir, wb);
+
     advanceAnimation(now);
     updateParticles(dt);
     bubble = bubble ? Bubbles.update(bubble, Date.now()) : null;
@@ -575,6 +590,42 @@
   function updateParticles(dt) {
     if (!particleList.length) return;
     particleList = Particles.update(particleList, dt);
+  }
+
+  /** Report, once, if the walk cycle is running but Pip is going nowhere. */
+  function checkStuck(now, dir, wb) {
+    if (now - stuckCheckAt < 1000) return;
+    stuckCheckAt = now;
+
+    const walking = clip === 'walk' || clip === 'run';
+    const moved = Math.abs(body.x - stuckLastX);
+    stuckLastX = body.x;
+
+    if (!walking || moved > 2) {
+      stuckFor = 0;
+      stuckReported = false;
+      return;
+    }
+
+    stuckFor += 1;
+    if (stuckFor < 3 || stuckReported) return;
+    stuckReported = true;
+    notify('pip:error', {
+      message: 'STUCK: walk cycle running but not moving',
+      stack: JSON.stringify({
+        bodyX: Math.round(body.x), bodyY: Math.round(body.y),
+        vx: Math.round(body.vx), vy: Math.round(body.vy),
+        grounded: body.grounded, climbing: body.climbing, held: body.held,
+        wbLeft: Math.round(wb.left), wbRight: Math.round(wb.right),
+        wbBottom: Math.round(wb.bottom),
+        boundsW: Math.round(bounds.width), boundsH: Math.round(bounds.height),
+        scale: settings.scale, dpr: dpr,
+        walkDir: walkDir, walkSpeed: Math.round(walkSpeed), dir: dir,
+        gotoX: gotoX === null ? null : Math.round(gotoX),
+        clip: clip, commandedClip: commandedClip, localClip: localClip,
+        pipState: pipState, drag: !!drag
+      })
+    });
   }
 
   /* ---------------------------------------------------------------- *
