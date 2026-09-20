@@ -54,7 +54,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Pip",
       "uninstallDisplayName": "Pip",
-      "artifactName": "Pip-Setup-${version}.${ext}"
+      "artifactName": "Pip-Setup-${version}.${ext}",
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "Pip-Portable-${version}.${ext}"
