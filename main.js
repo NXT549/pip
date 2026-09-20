@@ -122,6 +122,9 @@ function runApp(store) {
     lastState: null,
     lastTooltip: '',
     nightcap: false,
+    saidFatigue: null,      // 'drowsy' | 'exhausted', so each is said once per stretch
+    batteryWarnedAt: 0,
+    chasingUntil: 0,
     onboardingStep: -1
   };
 
@@ -266,12 +269,54 @@ function runApp(store) {
       activity.pause * (IS_DEV ? 0.15 : 1);
     world.nextBehaviorAt = t + spread;
 
+    const roll = rng();
+    if (roll < 0.12 && t >= world.chasingUntil) {
+      // Give the pointer a run for its money instead of a set-piece.
+      chaseCursor(t);
+      return;
+    }
     // Only actually play one some of the time, so Pip is not constantly performing.
-    if (rng() < 0.55) {
+    if (roll < 0.62) {
       const clip = pickBehavior();
       world.behavior = { clip: clip, until: t + scaled(BEHAVIOR_LENGTH_MS) };
       if (clip === 'nap') particles('zzz', 3);
+    } else if (roll > 0.9) {
+      // A passing remark, coloured by how Pip is feeling. The chatter
+      // cooldown in say() keeps this from becoming a running commentary.
+      const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), t));
+      if (band === 'low') say('low_mood');
+      else if (band === 'high') say('high_mood');
     }
+  }
+
+  /**
+   * Say something the first time Pip crosses the drowsy and exhausted lines,
+   * and not again until a break resets him. Supportive, never nagging.
+   */
+  function announceFatigue(t, s) {
+    const worked = reminders.continuousWorkMs(world.reminders, t);
+    const exhausted = worked >= s.exhaustedAfter * MINUTE * TIME_SCALE;
+    const drowsy = worked >= s.drowsyAfter * MINUTE * TIME_SCALE;
+
+    if (!drowsy) { world.saidFatigue = null; return; }
+    if (exhausted && world.saidFatigue !== 'exhausted') {
+      world.saidFatigue = 'exhausted';
+      say('exhausted', true);
+      particles('sweat', 2);
+    } else if (!exhausted && world.saidFatigue === null) {
+      world.saidFatigue = 'drowsy';
+      say('drowsy', true);
+    }
+  }
+
+  /**
+   * Bored: now and then Pip gives chase to the pointer for a few seconds,
+   * then gives up and goes back to pottering about.
+   */
+  function chaseCursor(t) {
+    world.chasingUntil = t + scaled(4000);
+    callPip();
+    say('bored');
   }
 
   /* ---------------------------------------------------------------- *
@@ -805,6 +850,7 @@ function runApp(store) {
       const s = store.all;
 
       if (isNightcapHour() !== world.nightcap) sendSettings();
+      announceFatigue(t, s);
       if (world.reaction && t >= world.reaction.until) world.reaction = null;
       if (world.behavior && t >= world.behavior.until) world.behavior = null;
       if (!world.asleep && !world.held) maybeStartBehavior();
@@ -828,7 +874,9 @@ function runApp(store) {
         mood: mood.decay(s.mood, s.moodUpdatedAt, t),
         hour: new Date(t).getHours(),
         activityLevel: s.activityLevel,
-        climbing: world.climbing
+        climbing: world.climbing,
+        onBreak: store.get('pomodoro').phase === 'break' ||
+                 store.get('pomodoro').phase === 'longBreak'
       });
       world.wander = result.wander;
 
@@ -940,13 +988,20 @@ function runApp(store) {
         bumpMood('snack');
         return;
       }
-      react('happy');
+      // A thirsty Pip takes a click as "yes, I drank some".
+      if (world.thirsty) {
+        doAction('water');
+        return;
+      }
+      const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now()));
+      react(band === 'high' ? 'laugh' : 'happy');
       particles('heart', 2);
       say('click');
     });
 
     ipcMain.on('pip:pet', () => {
-      react('heart');
+      const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now()));
+      react(band === 'high' ? 'blush' : 'heart');
       particles('heart', 4);
       say('pet');
       bumpMood('pet');
@@ -959,6 +1014,17 @@ function runApp(store) {
 
     ipcMain.on('pip:climb', (_e, payload) => {
       world.climbing = !!(payload && payload.climbing);
+    });
+
+    // Electron cannot read the charge level, so the renderer reports it here.
+    ipcMain.on('pip:battery', (_e, payload) => {
+      if (!payload || typeof payload.level !== 'number') return;
+      const low = payload.level < 0.2 && !payload.charging;
+      if (!low) { world.batteryWarnedAt = 0; return; }
+      if (now() - world.batteryWarnedAt < scaled(30 * MINUTE)) return;
+      world.batteryWarnedAt = now();
+      react('sulk', 3000);
+      say('battery_low', true);
     });
 
     ipcMain.on('pip:context-menu', () => {

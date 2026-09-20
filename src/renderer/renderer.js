@@ -40,6 +40,9 @@
   /** Eye tracking kicks in inside this radius. */
   const LOOK_RANGE = 220;
 
+  /** Above this ground speed Pip is running, not trotting. */
+  const RUN_SPEED = 70;            // DIP/s
+
   const CLIMB_SPEED = 46;          // DIP/s up a wall
   const CLIMB_CHANCE = 0.25;       // on bumping a wall while wandering
   const HANG_MS = 2600;
@@ -86,6 +89,7 @@
 
   let climbUntil = 0;
   let lastClimbSent = false;
+  let landedUntil = 0;
 
   let lastDrawKey = '';
   let lastTick = 0;
@@ -447,15 +451,26 @@
     }
     const events = Physics.step(body, dt, wb, opts);
     if (events.respawned) notify('pip:error', { message: 'position was invalid, respawned' });
-    if (events.landed && events.speed > 420) {
-      Particles.spawn(particleList, 'sparkle', body.x, body.y, 2);
+    if (events.landed) {
+      // A gentle touchdown squashes and carries on; a real thump knocks Pip
+      // flat and he has to pick himself up again.
+      if (events.speed > 900) {
+        setClip('getup', now);
+        Particles.spawn(particleList, 'star', body.x, body.y - settings.scale * 18, 3);
+      } else if (events.speed > 260) {
+        setClip('land', now);
+      }
+      if (events.speed > 420) Particles.spawn(particleList, 'sparkle', body.x, body.y, 2);
+      landedUntil = now + 500;
     }
 
-    // Walking should look like walking even when the brain says idle.
-    if (!body.climbing && !drag) {
+    // Walking should look like walking even when the brain says idle, but a
+    // landing gets to play out first.
+    if (!body.climbing && !drag && now >= landedUntil) {
       if (!body.grounded && body.vy > 120) setClip('fall', now);
-      else if (dir !== 0 && body.grounded && clip !== 'walk' && clip !== 'run' && pipState === 'idle') {
-        setClip('walk', now);
+      else if (dir !== 0 && body.grounded && pipState === 'idle') {
+        // Anything brisker than a stroll reads as a run.
+        setClip(Math.abs(body.vx) > RUN_SPEED ? 'run' : 'walk', now);
       }
     }
 
@@ -686,7 +701,12 @@
 
   if (navigator.getBattery) {
     navigator.getBattery().then((b) => {
-      const read = () => { battery = { level: b.level, charging: b.charging }; lastDrawKey = ''; };
+      const read = () => {
+        battery = { level: b.level, charging: b.charging };
+        lastDrawKey = '';
+        // Main owns the speech, so it needs to know when things get dire.
+        notify('pip:battery', { level: b.level, charging: b.charging });
+      };
       read();
       b.addEventListener('levelchange', read);
       b.addEventListener('chargingchange', read);

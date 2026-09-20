@@ -32,6 +32,7 @@ const OUTBOUND = [
   'pip:pet',             // {} - cursor rested on Pip for ~1s
   'pip:startle',         // {} - fast jerky cursor movement nearby
   'pip:climb',           // {climbing:boolean}
+  'pip:battery',         // {level:0..1, charging:boolean}
   'pip:context-menu',    // {x, y} in overlay DIPs
   'pip:error'            // {message, stack}
 ];
