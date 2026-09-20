@@ -44,7 +44,7 @@ const DEFAULTS = {
   mood: 60,
   moodUpdatedAt: 0,
   quietUntil: 0,
-  lastGoodMorning: 0,
+  lastGoodMorning: '',        // local YYYY-MM-DD, so it survives a restart
   lastLateNightNudge: 0,
 
   // pomodoro survives a restart by storing when the block started

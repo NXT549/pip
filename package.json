@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.js\"",
     "smoke": "node scripts/smoke.js",
     "icons": "node scripts/make-icons.js",
     "sprites": "node tools/gen-sprites.js",

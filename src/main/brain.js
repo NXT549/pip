@@ -134,12 +134,37 @@ function decide(input) {
   // 4. thirsty ------------------------------------------------------
   if (input.thirsty) return still('thirsty', 'thirsty');
 
-  // 5 & 6. worked too long without a break --------------------------
+  // 5. exhausted ----------------------------------------------------
   const worked = input.continuousWorkMs || 0;
   if (input.exhaustedAfterMs && worked >= input.exhaustedAfterMs) {
     return still('exhausted', 'exhausted');
   }
-  const drowsy = input.drowsyAfterMs && worked >= input.drowsyAfterMs;
+
+  /** Advance the stroll/stand-around cycle if this leg of it has run out. */
+  const advanceWander = () => {
+    if (now < wander.until) return wander;
+    if (wander.moving) {
+      return { dir: 0, until: now + pick(rng, PAUSE_MIN, PAUSE_MAX) * activity.pause, moving: false };
+    }
+    return {
+      dir: rng() < 0.5 ? -1 : 1,
+      until: now + pick(rng, WANDER_MIN, WANDER_MAX) * activity.wander,
+      moving: true
+    };
+  };
+
+  // 6. drowsy -------------------------------------------------------
+  // Outranks reactions on purpose: once Pip is this tired, being petted does
+  // not perk him up, he just keeps plodding. Still mobile, only slower.
+  if (input.drowsyAfterMs && worked >= input.drowsyAfterMs) {
+    const pace = paceFor('drowsy', mood, hour) * activity.speed;
+    if (input.quiet || input.hidden) return still('drowsy', 'drowsy');
+    wander = advanceWander();
+    if (wander.moving && pace > 0) {
+      return { state: 'drowsy', clip: 'walk', walkDir: wander.dir, walkSpeed: BASE_WALK * pace, wander: wander };
+    }
+    return { state: 'drowsy', clip: 'drowsy', walkDir: 0, walkSpeed: 0, wander: wander };
+  }
 
   // 7. a short-lived reaction to you --------------------------------
   if (input.reaction && now < input.reaction.until) {
@@ -153,20 +178,6 @@ function decide(input) {
   }
 
   // 8. idle ---------------------------------------------------------
-  if (drowsy) {
-    // Still mobile, just slower and heavier-lidded.
-    const pace = paceFor('drowsy', mood, hour);
-    if (input.behavior && now < input.behavior.until) {
-      return { state: 'drowsy', clip: input.behavior.clip, walkDir: 0, walkSpeed: 0, wander: wander };
-    }
-    return {
-      state: 'drowsy',
-      clip: 'drowsy',
-      walkDir: 0,
-      walkSpeed: BASE_WALK * pace,
-      wander: wander
-    };
-  }
 
   // A running idle behaviour is left to finish.
   if (input.behavior && now < input.behavior.until) {
@@ -180,22 +191,7 @@ function decide(input) {
   // Quiet mode and hidden both mean "stay put".
   if (input.quiet || input.hidden) return still('idle', 'idle');
 
-  // Wander: alternate between strolling and standing around.
-  if (now >= wander.until) {
-    if (wander.moving) {
-      wander = {
-        dir: 0,
-        until: now + pick(rng, PAUSE_MIN, PAUSE_MAX) * activity.pause,
-        moving: false
-      };
-    } else {
-      wander = {
-        dir: rng() < 0.5 ? -1 : 1,
-        until: now + pick(rng, WANDER_MIN, WANDER_MAX) * activity.wander,
-        moving: true
-      };
-    }
-  }
+  wander = advanceWander();
 
   const pace = paceFor('idle', mood, hour) * activity.speed;
   if (wander.moving && pace > 0) {

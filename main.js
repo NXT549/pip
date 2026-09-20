@@ -4,23 +4,39 @@
  * Owns the overlay window, the tray, the settings and debug windows, the
  * polling loops that watch the cursor and your idle time, the power events,
  * and every IPC channel. The renderer draws; this process decides.
+ *
+ * Everything time-based here derives from a stored timestamp, never from
+ * counting ticks, so suspending the machine cannot skew a Pomodoro or a
+ * work streak.
  */
 
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, powerMonitor } = require('electron');
+const {
+  app, BrowserWindow, Tray, Menu, ipcMain, screen,
+  nativeImage, powerMonitor, Notification, shell
+} = require('electron');
 
 const logger = require('./src/main/logger.js');
 const { createStorage } = require('./src/main/storage.js');
 const brain = require('./src/main/brain.js');
+const pomodoro = require('./src/main/pomodoro.js');
+const reminders = require('./src/main/reminders.js');
+const mood = require('./src/main/mood.js');
+const clicks = require('./src/main/clicks.js');
+const Lines = require('./src/renderer/lines.js');
 
 /* ------------------------------------------------------------------ *
  * Flags and paths
  * ------------------------------------------------------------------ */
 
-const IS_DEV = process.argv.includes('--dev') || !app.isPackaged;
 const IS_SMOKE = process.argv.includes('--smoke');
+const IS_DEV = process.argv.includes('--dev') || (!app.isPackaged && !IS_SMOKE);
+const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
+
+/** Dev runs compress every duration by 60x so a 25 minute block takes 25s. */
+const TIME_SCALE = IS_DEV ? 1 / 60 : 1;
 
 /** Dev runs keep their own userData so testing never pollutes real stats. */
 if (IS_DEV) {
@@ -28,10 +44,6 @@ if (IS_DEV) {
 }
 
 app.setAppUserModelId('com.pip.desktopbuddy');
-
-/* ------------------------------------------------------------------ *
- * Single instance
- * ------------------------------------------------------------------ */
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -43,13 +55,15 @@ if (!gotLock) {
 
 function start() {
   logger.init(path.join(app.getPath('userData'), 'logs'), IS_DEV);
-  logger.info('Pip starting', { dev: IS_DEV, smoke: IS_SMOKE, version: app.getVersion() });
+  logger.info('Pip starting', {
+    dev: IS_DEV, smoke: IS_SMOKE, portable: IS_PORTABLE, version: app.getVersion()
+  });
 
   const store = createStorage(app.getPath('userData'), logger);
   store.load();
 
-  // Compatibility mode is read before the app is ready because turning off
-  // hardware acceleration has to happen that early. It takes effect next launch.
+  // Compatibility mode has to be decided before the app is ready, which is why
+  // it only takes effect on the next launch.
   if (store.get('compatibilityMode')) {
     app.disableHardwareAcceleration();
     logger.info('compatibility mode on: hardware acceleration disabled');
@@ -63,38 +77,68 @@ function start() {
  * ------------------------------------------------------------------ */
 
 function runApp(store) {
-  /** @type {BrowserWindow|null} */
-  let overlay = null;
-  /** @type {Tray|null} */
-  let tray = null;
+  /** @type {BrowserWindow|null} */ let overlay = null;
+  /** @type {BrowserWindow|null} */ let settingsWin = null;
+  /** @type {BrowserWindow|null} */ let debugWin = null;
+  /** @type {Tray|null} */ let tray = null;
 
   let currentDisplayId = null;
   let quitting = false;
 
-  // Everything the brain needs that lives across ticks.
+  const SCALE_BY_SIZE = { small: 3, medium: 4, large: 5 };
+  const MINUTE = 60000;
+
+  /** Reaction lengths, before the dev time scale. */
+  const REACTION_MS = {
+    happy: 1800, heart: 2400, eat: 2000, surprise: 1500,
+    sulk: 3000, laugh: 2000, blush: 2000, dizzy: 2600
+  };
+  const CELEBRATE_MS = 6000;
+  /** Idle behaviours are picked on this cadence, scaled by activity level. */
+  const BEHAVIOR_MIN_MS = 20000;
+  const BEHAVIOR_MAX_MS = 90000;
+  const BEHAVIOR_LENGTH_MS = 4000;
+
+  const rng = IS_SMOKE ? brain.seededRng(1234) : Math.random;
+
+  /** Everything that lives across ticks. */
   const world = {
     wander: { dir: 0, until: 0, moving: false },
     reaction: null,
     behavior: null,
+    nextBehaviorAt: 0,
     held: false,
     asleep: false,
-    thirsty: false,
+    climbing: false,
     celebrateUntil: 0,
-    continuousWorkMs: 0,
-    climbing: false
+    thirsty: false,
+    idleSeconds: 0,
+    reminders: reminders.createState(),
+    clicks: clicks.createState(),
+    clockOffset: 0,          // debug fast-forward
+    forced: { state: null, clip: null },
+    lastBubbleAt: 0,
+    lastLine: {},            // situation -> last line shown
+    lastState: null,
+    lastTooltip: '',
+    nightcap: false,
+    onboardingStep: -1
   };
 
-  let lastState = null;
   let cursorTimer = null;
   let brainTimer = null;
+  let idleTimer = null;
+  let onboardingTimer = null;
 
-  const rng = IS_SMOKE ? brain.seededRng(1234) : Math.random;
+  /** The clock everything reads, so the debug panel can push it forward. */
+  const now = () => Date.now() + world.clockOffset;
+
+  /** Scale a configured duration into the running time base. */
+  const scaled = (ms) => ms * TIME_SCALE;
 
   /* ---------------------------------------------------------------- *
-   * Sizing
+   * Sizing and displays
    * ---------------------------------------------------------------- */
-
-  const SCALE_BY_SIZE = { small: 3, medium: 4, large: 5 };
 
   function scale() {
     return SCALE_BY_SIZE[store.get('petSize')] || 4;
@@ -110,8 +154,7 @@ function runApp(store) {
 
   /**
    * Fit the overlay to the work area of the display Pip is on. The work area
-   * already excludes the taskbar wherever the user keeps it, including when it
-   * auto-hides.
+   * already excludes the taskbar wherever it lives, including when it hides.
    */
   function fitToDisplay(display) {
     if (!overlay || overlay.isDestroyed()) return;
@@ -128,21 +171,274 @@ function runApp(store) {
   function sendBounds() {
     if (!overlay || overlay.isDestroyed()) return;
     const b = overlay.getBounds();
-    overlay.webContents.send('pip:bounds', {
+    send('pip:bounds', {
       left: 0, top: 0, right: b.width, bottom: b.height,
       width: b.width, height: b.height
     });
   }
 
-  function sendSettings() {
+  function send(channel, payload) {
     if (!overlay || overlay.isDestroyed()) return;
-    overlay.webContents.send('pip:settings', {
+    overlay.webContents.send(channel, payload);
+  }
+
+  /** After 10pm Pip puts on a nightcap; the renderer swaps in the _cap frames. */
+  function isNightcapHour() {
+    const hour = new Date(now()).getHours();
+    return hour >= 22 || hour < 5;
+  }
+
+  function sendSettings() {
+    world.nightcap = isNightcapHour();
+    send('pip:settings', {
       flavor: store.get('flavor'),
       scale: scale(),
       activityLevel: store.get('activityLevel'),
-      quiet: Date.now() < store.get('quietUntil'),
+      quiet: now() < store.get('quietUntil'),
+      nightcap: world.nightcap,
       dev: IS_DEV
     });
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Speech
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Say something. `essential` bypasses the chatter cooldown - reminders and
+   * Pomodoro results always get through, small talk does not.
+   */
+  function say(situation, essential) {
+    const t = now();
+    if (t < store.get('quietUntil')) return;
+    if (!essential && t - world.lastBubbleAt < scaled(120000)) return;
+
+    const text = Lines.pick(situation, {
+      mood: store.get('mood'),
+      hour: new Date(t).getHours(),
+      last: world.lastLine[situation],
+      rng: rng
+    });
+    if (!text) return;
+    world.lastLine[situation] = text;
+    world.lastBubbleAt = t;
+    send('pip:say', { text: text, ms: 4000 });
+  }
+
+  function particles(kind, count) {
+    send('pip:particles', { kind: kind, count: count });
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Reactions, moods, behaviours
+   * ---------------------------------------------------------------- */
+
+  function react(clip, ms) {
+    world.reaction = { clip: clip, until: now() + scaled(ms || REACTION_MS[clip] || 1800) };
+  }
+
+  function bumpMood(event) {
+    const current = mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now());
+    store.set({ mood: mood.apply(current, event), moodUpdatedAt: now() });
+    pushSettings();
+  }
+
+  /** Weighted by mood: a cheerful Pip dances, a glum one reads and naps. */
+  function pickBehavior() {
+    const m = store.get('mood');
+    const lively = ['dance', 'juggle', 'wave', 'chase', 'stretch'];
+    const quietOnes = ['sit', 'read', 'nap', 'yawn'];
+    const always = ['stretch', 'yawn', 'sit', 'trip', 'wave'];
+    let pool = always.concat(m >= 60 ? lively : [], m < 40 ? quietOnes : []);
+    if (m >= 40 && m < 60) pool = pool.concat(['chase', 'read']);
+    return pool[Math.floor(rng() * pool.length)] || 'stretch';
+  }
+
+  function maybeStartBehavior() {
+    const t = now();
+    if (world.behavior && t < world.behavior.until) return;
+    if (t < world.nextBehaviorAt) return;
+    if (t < store.get('quietUntil') || store.get('hidden')) return;
+
+    const activity = brain.ACTIVITY[store.get('activityLevel')] || brain.ACTIVITY.normal;
+    // Dev mode makes idle behaviours much more frequent so they can be seen.
+    const spread = (BEHAVIOR_MIN_MS + rng() * (BEHAVIOR_MAX_MS - BEHAVIOR_MIN_MS)) *
+      activity.pause * (IS_DEV ? 0.15 : 1);
+    world.nextBehaviorAt = t + spread;
+
+    // Only actually play one some of the time, so Pip is not constantly performing.
+    if (rng() < 0.55) {
+      const clip = pickBehavior();
+      world.behavior = { clip: clip, until: t + scaled(BEHAVIOR_LENGTH_MS) };
+      if (clip === 'nap') particles('zzz', 3);
+    }
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Pomodoro
+   * ---------------------------------------------------------------- */
+
+  function pomodoroCfg() {
+    const s = store.all;
+    return {
+      pomodoroWork: s.pomodoroWork,
+      pomodoroBreak: s.pomodoroBreak,
+      pomodoroLongBreak: s.pomodoroLongBreak,
+      pomodoroLongEvery: s.pomodoroLongEvery,
+      timeScale: TIME_SCALE
+    };
+  }
+
+  function notify(title, body) {
+    if (!store.get('notifications')) return;
+    if (!Notification.isSupported()) return;
+    try {
+      new Notification({
+        title: title,
+        body: body,
+        icon: path.join(__dirname, 'assets', 'icon-256.png'),
+        silent: false
+      }).show();
+    } catch (err) {
+      logger.warn('notification failed', err);
+    }
+  }
+
+  function tickPomodoro() {
+    const state = store.get('pomodoro');
+    if (state.phase === 'off') return;
+    const res = pomodoro.tick(state, now(), pomodoroCfg());
+    if (res.transitioned) {
+      store.set({ pomodoro: res.state });
+      if (res.finishedPhase === 'work') {
+        const today = store.get('today');
+        store.set({ today: Object.assign({}, today, { pomodoros: today.pomodoros + 1 }) });
+        world.celebrateUntil = now() + scaled(CELEBRATE_MS);
+        particles('confetti', 18);
+        say('pomodoro_done', true);
+        notify('Nice focus!', 'That is one Pomodoro done. Time for a break.');
+        bumpMood('pomodoro');
+      } else {
+        say('break_over', true);
+        notify('Break over', 'Back to it when you are ready.');
+      }
+      pushSettings();
+    }
+    sendPomodoro();
+  }
+
+  function sendPomodoro() {
+    const state = store.get('pomodoro');
+    const cfg = pomodoroCfg();
+    const running = state.phase !== 'off';
+    const remainingMs = running ? pomodoro.remaining(state, now(), cfg) : 0;
+    send('pip:pomodoro', {
+      running: running,
+      phase: state.phase,
+      remainingMs: remainingMs,
+      totalMs: running ? pomodoro.phaseDuration(state.phase, cfg) : 0
+    });
+
+    const tip = running
+      ? 'Pip - ' + Math.max(0, Math.ceil(remainingMs / 60000)) + ' min left (' + state.phase + ')'
+      : 'Pip';
+    if (tray && !tray.isDestroyed() && tip !== world.lastTooltip) {
+      world.lastTooltip = tip;
+      tray.setToolTip(tip);
+    }
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Activity, water, time of day
+   * ---------------------------------------------------------------- */
+
+  function pollIdle() {
+    let idleSeconds;
+    try {
+      idleSeconds = powerMonitor.getSystemIdleTime();
+    } catch (err) {
+      return;
+    }
+    world.idleSeconds = idleSeconds;
+
+    const res = reminders.onIdleSample(world.reminders, idleSeconds, now());
+    world.reminders = res.state;
+    if (res.tookBreak) {
+      bumpMood('break');
+      persistStreak();
+    }
+
+    // Away for five minutes or more and Pip curls up.
+    const wasAsleep = world.asleep;
+    if (!world.held) world.asleep = idleSeconds >= 300;
+    if (wasAsleep && !world.asleep) onWakeUp();
+
+    if (!world.asleep) {
+      maybeGoodMorning();
+      maybeLateNight();
+      const cfg = { waterInterval: store.get('waterInterval') * TIME_SCALE };
+      const due = reminders.waterDue(world.reminders, now(), cfg);
+      if (due && !world.thirsty) {
+        world.thirsty = true;
+        say('water_due', true);
+        particles('sweat', 2);
+      }
+      world.thirsty = due;
+    }
+
+    rollDayIfNeeded();
+    pushDebug();
+  }
+
+  function persistStreak() {
+    const longest = reminders.longestStreakMs(world.reminders);
+    const today = store.get('today');
+    if (longest > (today.longestStreakMs || 0)) {
+      store.set({ today: Object.assign({}, today, { longestStreakMs: longest }) });
+      pushSettings();
+    }
+  }
+
+  function rollDayIfNeeded() {
+    const rolled = reminders.rollDay(world.reminders, now());
+    if (rolled !== world.reminders) {
+      world.reminders = rolled;
+      const key = reminders.localDateKey(now());
+      const today = store.get('today');
+      if (today.date !== key) {
+        store.set({ today: { date: key, pomodoros: 0, water: 0, longestStreakMs: 0 } });
+        pushSettings();
+        logger.info('daily stats rolled over to ' + key);
+      }
+    }
+  }
+
+  function onWakeUp() {
+    logger.info('you came back');
+    callPip();
+    react('happy');
+    say('welcome_back', true);
+    particles('sparkle', 5);
+  }
+
+  function maybeGoodMorning() {
+    const t = now();
+    const hour = new Date(t).getHours();
+    if (hour < 5 || hour > 11) return;
+    const key = reminders.localDateKey(t);
+    if (store.get('lastGoodMorning') === key) return;
+    store.set({ lastGoodMorning: key });
+    world.behavior = { clip: 'stretch', until: t + scaled(BEHAVIOR_LENGTH_MS) };
+    say('good_morning', true);
+  }
+
+  function maybeLateNight() {
+    const t = now();
+    const hour = new Date(t).getHours();
+    if (hour < 23 && hour >= 5) return;
+    if (t - store.get('lastLateNightNudge') < scaled(60 * MINUTE)) return;
+    store.set({ lastLateNightNudge: t });
+    say('late_night', true);
   }
 
   /* ---------------------------------------------------------------- *
@@ -155,10 +451,7 @@ function runApp(store) {
     currentDisplayId = display.id;
 
     overlay = new BrowserWindow({
-      x: wa.x,
-      y: wa.y,
-      width: wa.width,
-      height: wa.height,
+      x: wa.x, y: wa.y, width: wa.width, height: wa.height,
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
@@ -187,7 +480,6 @@ function runApp(store) {
     // renderer so it can tell when the cursor is over Pip's actual pixels.
     overlay.setIgnoreMouseEvents(true, { forward: true });
     overlay.setMenu(null);
-
     overlay.loadFile(path.join(__dirname, 'src', 'renderer', 'overlay.html'));
 
     overlay.once('ready-to-show', () => {
@@ -201,38 +493,168 @@ function runApp(store) {
       if (!quitting && overlay && !overlay.isDestroyed()) overlay.reload();
     });
 
-    overlay.webContents.on('console-message', (_e, level, message) => {
-      if (level >= 2) logger.warn('renderer:', message);
+    // Never let a stray link navigate the overlay away from Pip.
+    overlay.webContents.setWindowOpenHandler(({ url }) => {
+      shell.openExternal(url).catch(() => {});
+      return { action: 'deny' };
     });
 
     overlay.on('closed', () => { overlay = null; });
   }
 
   /* ---------------------------------------------------------------- *
-   * Tray
+   * Settings and debug windows
+   * ---------------------------------------------------------------- */
+
+  function todayPayload() {
+    const today = store.get('today');
+    return {
+      pomodoros: today.pomodoros,
+      water: today.water,
+      longestStreakMs: Math.max(
+        today.longestStreakMs || 0,
+        reminders.continuousWorkMs(world.reminders, now())
+      ),
+      mood: mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now())
+    };
+  }
+
+  function settingsPayload() {
+    return {
+      settings: store.all,
+      today: todayPayload(),
+      pomodoroRunning: store.get('pomodoro').phase !== 'off'
+    };
+  }
+
+  function pushSettings() {
+    if (settingsWin && !settingsWin.isDestroyed()) {
+      settingsWin.webContents.send('settings:update', settingsPayload());
+    }
+  }
+
+  function openSettings() {
+    if (settingsWin && !settingsWin.isDestroyed()) {
+      settingsWin.show();
+      settingsWin.focus();
+      return settingsWin;
+    }
+    settingsWin = new BrowserWindow({
+      width: 640,
+      height: 860,
+      minWidth: 520,
+      minHeight: 520,
+      title: 'Pip settings',
+      icon: path.join(__dirname, 'assets', 'icon-256.png'),
+      autoHideMenuBar: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    });
+    settingsWin.setMenu(null);
+    settingsWin.loadFile(path.join(__dirname, 'settings', 'settings.html'));
+    settingsWin.once('ready-to-show', () => settingsWin.show());
+    settingsWin.on('closed', () => { settingsWin = null; });
+    return settingsWin;
+  }
+
+  function openDebug() {
+    if (!IS_DEV) return null;
+    if (debugWin && !debugWin.isDestroyed()) {
+      debugWin.show();
+      debugWin.focus();
+      return debugWin;
+    }
+    debugWin = new BrowserWindow({
+      width: 360,
+      height: 720,
+      title: 'Pip debug',
+      autoHideMenuBar: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    });
+    debugWin.setMenu(null);
+    debugWin.loadFile(path.join(__dirname, 'debug', 'debug.html'));
+    debugWin.once('ready-to-show', () => debugWin.show());
+    debugWin.on('closed', () => { debugWin = null; });
+    return debugWin;
+  }
+
+  function pushDebug() {
+    if (!debugWin || debugWin.isDestroyed()) return;
+    const state = store.get('pomodoro');
+    const cfg = pomodoroCfg();
+    const waterCfg = { waterInterval: store.get('waterInterval') * TIME_SCALE };
+    debugWin.webContents.send('debug:state', {
+      state: world.lastState ? world.lastState.split('|')[0] : '-',
+      clip: world.lastState ? world.lastState.split('|')[1] : '-',
+      flavor: store.get('flavor'),
+      mood: mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now()),
+      continuousWorkMs: reminders.continuousWorkMs(world.reminders, now()),
+      idleSeconds: world.idleSeconds,
+      pomodoro: {
+        phase: state.phase,
+        completed: state.completed,
+        remainingMs: state.phase === 'off' ? 0 : pomodoro.remaining(state, now(), cfg)
+      },
+      waterDueInMs: Math.max(0,
+        store.get('waterInterval') * MINUTE * TIME_SCALE -
+        reminders.activeSinceWaterMs(world.reminders, now())),
+      clockOffsetMs: world.clockOffset,
+      forced: world.forced
+    });
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Tray and menus
    * ---------------------------------------------------------------- */
 
   function trayImage() {
-    const file = path.join(__dirname, 'assets', 'tray.png');
-    const img = nativeImage.createFromPath(file);
+    const img = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray.png'));
     return img.isEmpty() ? nativeImage.createEmpty() : img;
   }
 
+  /** The tray menu and Pip's right-click menu are deliberately identical. */
   function buildMenu() {
-    const hidden = store.get('hidden');
-    return Menu.buildFromTemplate([
-      { label: hidden ? 'Show Pip' : 'Hide Pip', click: () => toggleVisible() },
-      { label: 'Reset position', click: () => resetPosition() },
+    const running = store.get('pomodoro').phase !== 'off';
+    const quiet = now() < store.get('quietUntil');
+    const items = [
+      { label: running ? 'Stop Pomodoro' : 'Start Pomodoro', click: () => doAction('pomodoro-toggle') },
+      { label: 'I drank water', click: () => doAction('water') },
+      { label: 'Feed Pip', click: () => doAction('feed') },
+      { label: 'Call Pip', click: () => doAction('call') },
       { type: 'separator' },
-      { label: 'Quit Pip', click: () => quit() }
-    ]);
+      {
+        label: quiet ? 'Quiet mode (on)' : 'Quiet mode for 1 hour',
+        type: 'checkbox',
+        checked: quiet,
+        click: () => doAction('quiet')
+      },
+      { label: store.get('hidden') ? 'Show Pip' : 'Hide Pip', click: () => doAction('toggle-visible') },
+      { label: 'Reset position', click: () => doAction('reset-position') },
+      { type: 'separator' },
+      { label: 'Settings', click: () => doAction('settings') }
+    ];
+    if (IS_DEV) items.push({ label: 'Debug panel', click: () => doAction('debug') });
+    items.push({ type: 'separator' });
+    items.push({ label: 'Quit Pip', click: () => doAction('quit') });
+    return Menu.buildFromTemplate(items);
   }
 
   function createTray() {
     tray = new Tray(trayImage());
     tray.setToolTip('Pip');
     tray.setContextMenu(buildMenu());
-    tray.on('click', () => toggleVisible());
+    tray.on('click', () => doAction('toggle-visible'));
   }
 
   function refreshMenu() {
@@ -240,30 +662,103 @@ function runApp(store) {
   }
 
   /* ---------------------------------------------------------------- *
-   * Actions
+   * Actions - shared by the tray, Pip's menu and the settings window
    * ---------------------------------------------------------------- */
 
-  function toggleVisible() {
-    const hidden = !store.get('hidden');
-    store.set({ hidden: hidden });
-    if (overlay && !overlay.isDestroyed()) {
-      if (hidden) overlay.hide();
-      else overlay.showInactive();
+  function doAction(action) {
+    switch (action) {
+      case 'pomodoro-toggle': {
+        const state = store.get('pomodoro');
+        if (state.phase === 'off') {
+          store.set({ pomodoro: pomodoro.start(state, now(), pomodoroCfg()) });
+          say('break_start', true);
+        } else {
+          store.set({ pomodoro: pomodoro.stop(state) });
+        }
+        sendPomodoro();
+        refreshMenu();
+        pushSettings();
+        break;
+      }
+      case 'water': {
+        world.reminders = reminders.logWater(world.reminders, now());
+        world.thirsty = false;
+        const today = store.get('today');
+        store.set({ today: Object.assign({}, today, { water: today.water + 1 }) });
+        react('happy');
+        particles('water', 5);
+        say('water_logged', true);
+        bumpMood('water');
+        pushSettings();
+        break;
+      }
+      case 'feed':
+        react('eat');
+        particles('sparkle', 4);
+        say('snack', true);
+        bumpMood('snack');
+        break;
+      case 'call':
+        callPip();
+        say('called', true);
+        break;
+      case 'quiet': {
+        const quiet = now() < store.get('quietUntil');
+        store.set({ quietUntil: quiet ? 0 : now() + scaled(60 * MINUTE) });
+        if (!quiet) say('quiet_on', true);
+        sendSettings();
+        refreshMenu();
+        break;
+      }
+      case 'toggle-visible': {
+        const hidden = !store.get('hidden');
+        store.set({ hidden: hidden });
+        if (overlay && !overlay.isDestroyed()) {
+          if (hidden) overlay.hide();
+          else { overlay.showInactive(); overlay.setAlwaysOnTop(true, 'floating'); }
+        }
+        refreshMenu();
+        break;
+      }
+      case 'reset-position':
+        if (overlay && !overlay.isDestroyed()) {
+          fitToDisplay(targetDisplay());
+          send('pip:reset');
+        }
+        logger.info('position reset');
+        break;
+      case 'settings':
+        openSettings();
+        break;
+      case 'debug':
+        openDebug();
+        break;
+      case 'quit':
+        quit();
+        break;
+      default:
+        logger.warn('unknown action: ' + action);
     }
-    refreshMenu();
   }
 
-  function resetPosition() {
+  /** Trot over to wherever the pointer is. */
+  function callPip() {
     if (!overlay || overlay.isDestroyed()) return;
-    fitToDisplay(targetDisplay());
-    overlay.webContents.send('pip:reset');
-    logger.info('position reset');
+    try {
+      const point = screen.getCursorScreenPoint();
+      const b = overlay.getBounds();
+      send('pip:goto', { x: point.x - b.x });
+    } catch (err) {
+      logger.warn('could not read the cursor for call', err);
+    }
   }
 
   function quit() {
     quitting = true;
-    if (cursorTimer) clearInterval(cursorTimer);
-    if (brainTimer) clearInterval(brainTimer);
+    for (const t of [cursorTimer, brainTimer, idleTimer, onboardingTimer]) {
+      if (t) clearInterval(t);
+    }
+    persistStreak();
     if (tray && !tray.isDestroyed()) tray.destroy();
     app.quit();
   }
@@ -297,52 +792,94 @@ function runApp(store) {
     const b = overlay.getBounds();
     const x = point.x - b.x;
     const y = point.y - b.y;
-    overlay.webContents.send('pip:cursor', {
-      x: x,
-      y: y,
+    send('pip:cursor', {
+      x: x, y: y,
       inside: x >= 0 && y >= 0 && x < b.width && y < b.height
     });
   }
 
-  /** The brain runs at 10Hz; state is only sent when something changed. */
+  /** The brain runs at 10Hz; state only goes down the wire when it changes. */
   function startBrain() {
     brainTimer = setInterval(() => {
-      const now = Date.now();
+      const t = now();
       const s = store.all;
+
+      if (isNightcapHour() !== world.nightcap) sendSettings();
+      if (world.reaction && t >= world.reaction.until) world.reaction = null;
+      if (world.behavior && t >= world.behavior.until) world.behavior = null;
+      if (!world.asleep && !world.held) maybeStartBehavior();
+      tickPomodoro();
+
       const result = brain.decide({
-        now: now,
+        now: t,
         rng: rng,
         held: world.held,
         asleep: world.asleep,
         celebrateUntil: world.celebrateUntil,
         thirsty: world.thirsty,
-        continuousWorkMs: world.continuousWorkMs,
-        drowsyAfterMs: s.drowsyAfter * 60000,
-        exhaustedAfterMs: s.exhaustedAfter * 60000,
+        continuousWorkMs: reminders.continuousWorkMs(world.reminders, t),
+        drowsyAfterMs: s.drowsyAfter * MINUTE * TIME_SCALE,
+        exhaustedAfterMs: s.exhaustedAfter * MINUTE * TIME_SCALE,
         reaction: world.reaction,
         behavior: world.behavior,
         wander: world.wander,
-        quiet: now < s.quietUntil,
+        quiet: t < s.quietUntil,
         hidden: s.hidden,
-        mood: s.mood,
-        hour: new Date(now).getHours(),
+        mood: mood.decay(s.mood, s.moodUpdatedAt, t),
+        hour: new Date(t).getHours(),
         activityLevel: s.activityLevel,
         climbing: world.climbing
       });
       world.wander = result.wander;
 
-      const key = result.state + '|' + result.clip + '|' + result.walkDir + '|' + Math.round(result.walkSpeed);
-      if (key === lastState) return;
-      lastState = key;
-      if (overlay && !overlay.isDestroyed()) {
-        overlay.webContents.send('pip:state', {
-          state: result.state,
-          clip: result.clip,
-          walkDir: result.walkDir,
-          walkSpeed: result.walkSpeed
-        });
-      }
+      // The debug panel can pin a state or a clip for inspection.
+      const state = world.forced.state || result.state;
+      const clip = world.forced.clip || result.clip;
+
+      const key = [state, clip, result.walkDir, Math.round(result.walkSpeed)].join('|');
+      if (key === world.lastState) return;
+      world.lastState = key;
+      send('pip:state', {
+        state: state,
+        clip: clip,
+        walkDir: world.forced.clip ? 0 : result.walkDir,
+        walkSpeed: result.walkSpeed
+      });
+      pushDebug();
     }, 100);
+  }
+
+  function startIdlePolling() {
+    idleTimer = setInterval(pollIdle, 10000);
+    pollIdle();
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Onboarding
+   * ---------------------------------------------------------------- */
+
+  const ONBOARDING = [
+    'onboarding_drag', 'onboarding_menu', 'onboarding_flavor', 'onboarding_tray'
+  ];
+
+  function runOnboarding() {
+    if (store.get('onboarded')) return;
+    world.onboardingStep = 0;
+    // Pip has just dropped in and landed; wave, then talk you through it.
+    world.behavior = { clip: 'wave', until: now() + scaled(3000) };
+    const step = () => {
+      if (world.onboardingStep >= ONBOARDING.length) {
+        clearInterval(onboardingTimer);
+        onboardingTimer = null;
+        store.set({ onboarded: true });
+        logger.info('onboarding shown');
+        return;
+      }
+      say(ONBOARDING[world.onboardingStep], true);
+      world.onboardingStep += 1;
+    };
+    setTimeout(step, 1200);
+    onboardingTimer = setInterval(step, 4600);
   }
 
   /* ---------------------------------------------------------------- *
@@ -352,7 +889,11 @@ function runApp(store) {
   function wireIPC() {
     ipcMain.on('pip:ready', () => {
       logger.info('renderer ready');
-      if (IS_SMOKE) runSmoke();
+      sendSettings();
+      sendBounds();
+      sendPomodoro();
+      if (IS_SMOKE) { runSmoke(); return; }
+      runOnboarding();
     });
 
     ipcMain.on('pip:set-interactive', (_e, payload) => {
@@ -361,10 +902,15 @@ function runApp(store) {
       overlay.setIgnoreMouseEvents(!payload.interactive, { forward: true });
     });
 
-    ipcMain.on('pip:grabbed', () => { world.held = true; });
+    ipcMain.on('pip:grabbed', () => {
+      world.held = true;
+      world.asleep = false;
+    });
 
     ipcMain.on('pip:dropped', () => {
       world.held = false;
+      react('dizzy');
+      particles('star', 4);
       // Follow the cursor to whichever display Pip was let go over.
       try {
         const point = screen.getCursorScreenPoint();
@@ -376,7 +922,43 @@ function runApp(store) {
     });
 
     ipcMain.on('pip:click', (_e, payload) => {
-      logger.debug('click', payload);
+      const res = clicks.record(world.clicks, now());
+      world.clicks = res.state;
+      const pattern = payload.kind === 'double' ? 'double' : res.pattern;
+
+      if (res.pattern === 'rapid') {
+        react('sulk');
+        say('annoyed', true);
+        // Puff up and scoot away from where the pointer is.
+        world.wander = { dir: rng() < 0.5 ? -1 : 1, until: now() + 1400, moving: true };
+        return;
+      }
+      if (pattern === 'double') {
+        react('eat');
+        particles('sparkle', 4);
+        say('snack', true);
+        bumpMood('snack');
+        return;
+      }
+      react('happy');
+      particles('heart', 2);
+      say('click');
+    });
+
+    ipcMain.on('pip:pet', () => {
+      react('heart');
+      particles('heart', 4);
+      say('pet');
+      bumpMood('pet');
+    });
+
+    ipcMain.on('pip:startle', () => {
+      react('surprise');
+      say('startle');
+    });
+
+    ipcMain.on('pip:climb', (_e, payload) => {
+      world.climbing = !!(payload && payload.climbing);
     });
 
     ipcMain.on('pip:context-menu', () => {
@@ -386,25 +968,98 @@ function runApp(store) {
     ipcMain.on('pip:error', (_e, payload) => {
       logger.error('renderer error:', payload && payload.message, payload && payload.stack);
     });
+
+    /* ---- settings window ---- */
+
+    ipcMain.handle('settings:get', () => settingsPayload());
+
+    ipcMain.on('settings:set', (_e, payload) => {
+      const patch = (payload && payload.patch) || {};
+      store.set(patch);
+      if ('launchAtLogin' in patch) applyLoginItem();
+      sendSettings();
+      refreshMenu();
+      pushSettings();
+      logger.info('settings changed', patch);
+    });
+
+    ipcMain.on('settings:action', (_e, payload) => {
+      if (payload && payload.action) doAction(payload.action);
+    });
+
+    /* ---- debug window ---- */
+
+    ipcMain.on('debug:force', (_e, payload) => {
+      if (!IS_DEV || !payload) return;
+      if ('state' in payload) world.forced.state = payload.state;
+      if ('clip' in payload) world.forced.clip = payload.clip;
+      if (payload.flavor) { store.set({ flavor: payload.flavor }); sendSettings(); }
+      if (payload.fastForwardMs) world.clockOffset += payload.fastForwardMs;
+      if (payload.resetClock) world.clockOffset = 0;
+      world.lastState = null;   // force a resend
+      pushDebug();
+    });
   }
 
   /* ---------------------------------------------------------------- *
-   * Displays and power
+   * Displays, power, login item
    * ---------------------------------------------------------------- */
 
   function wireSystemEvents() {
     const refit = () => {
       if (!overlay || overlay.isDestroyed()) return;
       fitToDisplay(targetDisplay());
+      // Always-on-top can be dropped by a resolution change, so re-assert it.
+      overlay.setAlwaysOnTop(true, 'floating');
     };
     screen.on('display-metrics-changed', refit);
     screen.on('display-added', refit);
     screen.on('display-removed', refit);
 
-    powerMonitor.on('suspend', () => { world.asleep = true; logger.info('system suspend'); });
-    powerMonitor.on('resume', () => { world.asleep = false; logger.info('system resume'); });
-    powerMonitor.on('lock-screen', () => { world.asleep = true; logger.info('screen locked'); });
-    powerMonitor.on('unlock-screen', () => { world.asleep = false; logger.info('screen unlocked'); });
+    const sleep = (why) => {
+      world.asleep = true;
+      world.reminders = reminders.onBreakEvent(world.reminders, now());
+      persistStreak();
+      logger.info(why);
+    };
+    const wake = (why) => {
+      world.asleep = false;
+      logger.info(why);
+      onWakeUp();
+    };
+
+    powerMonitor.on('suspend', () => sleep('system suspend'));
+    powerMonitor.on('lock-screen', () => sleep('screen locked'));
+    powerMonitor.on('resume', () => wake('system resume'));
+    powerMonitor.on('unlock-screen', () => wake('screen unlocked'));
+
+    powerMonitor.on('on-battery', () => {
+      logger.info('on battery');
+      react('sulk', 3000);
+      say('on_battery', true);
+    });
+    powerMonitor.on('on-ac', () => {
+      logger.info('on mains power');
+      react('happy');
+    });
+  }
+
+  /**
+   * Launch at login is on by default, but only ever registered for a real
+   * installed build - never from a dev run and never from the portable exe,
+   * which would point the shortcut at wherever the file happened to be.
+   */
+  function applyLoginItem() {
+    if (!app.isPackaged || IS_PORTABLE || IS_DEV) return;
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: !!store.get('launchAtLogin'),
+        path: process.execPath,
+        args: []
+      });
+    } catch (err) {
+      logger.warn('could not set the login item', err);
+    }
   }
 
   /* ---------------------------------------------------------------- *
@@ -423,8 +1078,26 @@ function runApp(store) {
       .then((errors) => {
         if (errors && errors.length) return fail(errors.join('; '));
         process.stdout.write('SMOKE OK all clips played in all flavors\n');
-        quitting = true;
-        app.exit(0);
+        // The settings window pulls in palettes and sprites over its own CSP,
+        // so check it actually rendered a preview per flavour rather than just
+        // that the window opened - a blocked script would fail silently.
+        const win = openSettings();
+        win.once('ready-to-show', () => {
+          setTimeout(() => {
+            win.webContents
+              .executeJavaScript('document.querySelectorAll(".flavor canvas").length', true)
+              .then((count) => {
+                try { win.close(); } catch (err) { /* already gone */ }
+                if (count !== 6) {
+                  return fail('settings rendered ' + count + ' flavour previews, expected 6');
+                }
+                process.stdout.write('SMOKE OK settings window rendered 6 flavour previews\n');
+                quitting = true;
+                app.exit(0);
+              })
+              .catch((err) => fail('settings check threw: ' + err.message));
+          }, 600);
+        });
       })
       .catch((err) => fail('playAll threw: ' + err.message));
   }
@@ -435,16 +1108,17 @@ function runApp(store) {
 
   app.on('second-instance', () => {
     // Launching Pip again just brings him over, rather than opening a copy.
+    if (store.get('hidden')) doAction('toggle-visible');
     if (overlay && !overlay.isDestroyed()) {
-      if (store.get('hidden')) toggleVisible();
       overlay.showInactive();
       overlay.setAlwaysOnTop(true, 'floating');
     }
+    world.behavior = { clip: 'wave', until: now() + scaled(2500) };
+    callPip();
   });
 
   // Closing a window must never quit Pip; only the Quit item does.
   app.on('window-all-closed', () => { /* deliberately empty */ });
-
   app.on('before-quit', () => { quitting = true; });
 
   process.on('uncaughtException', (err) => {
@@ -455,12 +1129,18 @@ function runApp(store) {
   });
 
   app.whenReady().then(() => {
+    // Recover a Pomodoro that was running when Pip was last closed.
+    store.set({ pomodoro: pomodoro.restore(store.get('pomodoro'), now(), pomodoroCfg()) });
+    rollDayIfNeeded();
+    applyLoginItem();
+
     wireIPC();
     createOverlay();
     createTray();
     wireSystemEvents();
     startCursorPolling();
     startBrain();
+    startIdlePolling();
 
     if (IS_SMOKE) {
       setTimeout(() => {

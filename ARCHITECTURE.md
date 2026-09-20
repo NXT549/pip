@@ -182,6 +182,9 @@ Animations.frameAt(name, elapsedMs) -> { frame, done }
 
 *Locomotion* — `idle` `walk` `run` `climb` `hang` `fall` `land` `getup` `dangle` `dizzy`
 
+`fall` loops: it is a sustained state until impact, so it must not drop back
+to `idle` mid-air.
+
 *Idle behaviours* — `stretch` `yawn` `sit` `chase` `juggle` `wave` `trip` `dance` `read` `nap`
 
 *Emotions* — `happy` `heart` `blush` `surprise` `sulk` `laugh` `eat`
@@ -195,6 +198,9 @@ Pose notes that matter:
 - `climb` — turned sideways (`rotate: ±90`), gripping with all four legs
 - `sit` — back legs folded under, front legs straight
 - `sleeping` / `nap` — curled into a tighter bean, legs tucked
+- after 10pm Pip wears a nightcap. The sleepy poses ship a `_cap` twin
+  (`sleeping_0_cap`, `nap_0_cap`, `drowsy_0_cap`, ...) and the renderer swaps
+  `frame` for `frame + '_cap'` whenever one exists and `settings.nightcap` is set
 - `land` — flattened and widened
 - `stretch` — front legs forward, back end up
 - `thirsty` — carrying the `cup` prop; `onbreak` — sipping from it
@@ -206,11 +212,16 @@ Pose notes that matter:
 Separate layer, never interactive, drawn above Pip.
 
 ```js
+Particles.KINDS   // ['heart','zzz','sparkle','confetti','sweat','water','star']
+Particles.MAX_PARTICLES // 120, oldest dropped past the cap
 Particles.create(kind, x, y, opts) -> particle
-Particles.update(list, dt) -> list      // drops dead particles
+Particles.spawn(list, kind, x, y, count, opts) -> list   // mutates and returns
+Particles.update(list, dt) -> list      // dt in SECONDS; returns a new array
 Particles.draw(ctx, list, scale)
-Particles.KINDS // ['heart','zzz','sparkle','confetti','sweat','water','star']
 ```
+
+`dt` is in **seconds**, the same clock `Physics.step` uses. Particle lifetimes
+are seconds and velocities are DIP/s. Bubbles, by contrast, work in ms.
 
 ---
 
@@ -221,16 +232,21 @@ and fades after **4000 ms**. Non-essential chatter has a **120 000 ms**
 cooldown. The same line never appears twice in a row.
 
 ```js
-Bubbles.create(text, now) -> bubble
-Bubbles.update(bubble, now) -> bubble|null
-Bubbles.layout(bubble, pipRect, viewport, ctx) -> { x, y, w, h, tailX }
+Bubbles.LIFETIME_MS (4000)  FADE_MS (600)  CHATTER_COOLDOWN_MS (120000)
+Bubbles.create(text, now, ms?) -> bubble   // ms overrides the default lifetime
+Bubbles.update(bubble, now) -> bubble|null // refreshes bubble.alpha
+Bubbles.measure(ctx, text, maxWidth) -> { lines, w, h }
+Bubbles.layout(bubble, pipRect, viewport, ctx) -> { x, y, w, h, tailX, tailY, above, lines, alpha }
 Bubbles.draw(ctx, bubble, layout)
-Bubbles.LIFETIME_MS // 4000
 ```
 
+`viewport` is `{width, height}` in **overlay-local DIPs** - the origin is
+treated as (0,0), so pass the overlay's size, not the raw `pip:bounds`.
+
 ```js
-Lines.pick(situation, { mood, hour, last }) -> string
+Lines.pick(situation, { mood, hour, last, rng }) -> string   // '' if unknown
 Lines.SITUATIONS // string[]
+Lines.variants(situation) -> string[]
 ```
 
 Every situation has **at least 6 variants**. Situations:
@@ -254,7 +270,7 @@ Only these names exist. `preload.js` enforces the list.
 
 | Channel | Payload |
 |---|---|
-| `pip:settings` | `{ flavor, scale, activityLevel, quiet, dev }` |
+| `pip:settings` | `{ flavor, scale, activityLevel, quiet, nightcap, dev }` |
 | `pip:bounds` | `{ left, top, right, bottom, width, height }` — overlay DIPs |
 | `pip:state` | `{ state, clip, walkDir, walkSpeed, facing? }` |
 | `pip:cursor` | `{ x, y, inside }` — overlay-relative DIPs |
