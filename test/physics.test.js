@@ -262,3 +262,58 @@ test('a called Pip standing at the far wall gives up rather than moonwalking', (
   assert.strictEqual(pinnedTicks, 0, 'Pip kept trying to walk somewhere he cannot stand');
   assert.strictEqual(gotoTarget, null);
 });
+
+/* ------------------------------------------------------------------ *
+ * Landing means touchdown
+ * ------------------------------------------------------------------ */
+
+test('a Pip standing on the floor does not keep landing', () => {
+  // Gravity is still applied to a grounded body, which the floor then pushes
+  // back up. That used to be reported as a landing on every single frame, and
+  // the renderer refreshed a 500ms "still landing" window on each one - so the
+  // logic that stops the walk cycle on the spot never ran while Pip stood on
+  // the ground. It is the root of the moonwalk.
+  const bounds = { left: 64, right: 1856, top: 64, bottom: 1000, height: 128 };
+  const body = Physics.createBody(900, 1000);
+  body.grounded = true;
+
+  let landings = 0;
+  for (let i = 0; i < 100; i++) {
+    if (Physics.step(body, 1 / 30, bounds, {}).landed) landings++;
+  }
+  assert.strictEqual(landings, 0, 'standing still reported ' + landings + ' landings');
+});
+
+test('the renderer\'s walk guard actually gets a chance to run while grounded', () => {
+  // The direct consequence of the above, replayed the way renderer.js does it.
+  const bounds = { left: 64, right: 1856, top: 64, bottom: 1000, height: 128 };
+  const body = Physics.createBody(900, 1000);
+  body.grounded = true;
+
+  let now = 0;
+  let landedUntil = 0;
+  let guardRan = 0;
+  for (let i = 0; i < 90; i++) {
+    now += 33;
+    if (Physics.step(body, 0.033, bounds, {}).landed) landedUntil = now + 500;
+    if (now >= landedUntil) guardRan++;
+  }
+  assert.strictEqual(guardRan, 90, 'the guard only ran on ' + guardRan + ' of 90 ticks');
+});
+
+test('a real drop still lands, and the bounces land too', () => {
+  const bounds = { left: 64, right: 1856, top: 64, bottom: 1000, height: 128 };
+  const body = Physics.createBody(900, 200);
+
+  const impacts = [];
+  for (let i = 0; i < 300; i++) {
+    const ev = Physics.step(body, 1 / 30, bounds, {});
+    if (ev.landed) impacts.push(ev.speed);
+  }
+  assert.ok(impacts.length >= 1, 'falling from a height must register a landing');
+  assert.ok(impacts[0] > 900, 'the first impact is a hard one');
+  for (let i = 1; i < impacts.length; i++) {
+    assert.ok(impacts[i] < impacts[i - 1], 'each bounce lands softer than the last');
+  }
+  assert.strictEqual(body.grounded, true, 'and he comes to rest');
+});

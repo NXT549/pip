@@ -275,7 +275,26 @@
       }
     }
     applyLook();
+    applyStandStill(now);
     applyNightcap();
+  }
+
+  /**
+   * Never draw the walk cycle on the spot.
+   *
+   * The walk clip reaches the screen two ways: the renderer's own override,
+   * and main simply commanding 'walk' while it wanders. Guarding only the
+   * first is how the moonwalk survived three fixes - main keeps asking for a
+   * walk while a wall has stopped Pip dead. So the decision is made here, at
+   * the frame, where it holds whichever path chose the clip: if Pip is on the
+   * ground and not actually travelling, he is shown standing and breathing.
+   */
+  function applyStandStill(now) {
+    if (clip !== 'walk' && clip !== 'run') return;
+    if (!body.grounded || drag || body.climbing) return;
+    if (Math.abs(body.vx) > MIN_WALK_VX) return;
+    const idle = Animations.frameAt('idle', now - clipStart);
+    if (idle.frame) currentFrame = idle.frame;
   }
 
   /**
@@ -490,12 +509,9 @@
    * ---------------------------------------------------------------- */
 
   function tick(now) {
-    requestAnimationFrame(tick);
-
+    // Hidden: do nothing and do not re-arm. visibilitychange wakes us.
     if (hidden()) return;
-    const minStep = 1000 / (sleeping ? SLEEP_FPS : TARGET_FPS);
-    if (now - lastTick < minStep) return;
-    const dt = Math.min(0.1, (now - lastTick) / 1000);
+    const dt = Math.min(0.1, Math.max(0, (now - lastTick) / 1000));
     lastTick = now;
 
     const wb = worldBounds();
@@ -588,11 +604,99 @@
       ready = true;
       notify('pip:ready', {});
     }
+
+    scheduleTick(nextDelay(now, dir));
   }
 
   function hidden() {
     return document.visibilityState === 'hidden';
   }
+
+
+  /* ---------------------------------------------------------------- *
+   * Scheduling
+   *
+   * The loop used to call requestAnimationFrame unconditionally at the top of
+   * every tick, so even a tick that immediately bailed out re-armed itself at
+   * the display's refresh rate. That kept Chromium's compositor and the GPU
+   * process running flat out forever: about 15% of a core measured with Pip
+   * standing perfectly still, and it never stopped while hidden either.
+   *
+   * Now each tick works out when the picture can next change and sleeps
+   * until then. Moving Pip still gets 30fps; a Pip who is only breathing
+   * wakes exactly when his next animation frame is due.
+   * ---------------------------------------------------------------- */
+
+  const ACTIVE_MS = 1000 / TARGET_FPS;
+  const SLEEP_MS = 1000 / SLEEP_FPS;
+  /** Upper bound on an idle sleep, so the watchdog and timers stay fresh. */
+  const MAX_IDLE_MS = 1000;
+
+  let wakeTimer = null;
+  let wakeAt = Infinity;
+
+  function runFrame() {
+    wakeTimer = null;
+    wakeAt = Infinity;
+    requestAnimationFrame(tick);
+  }
+
+  /** Run a tick in `delay` ms - unless one is already due sooner. */
+  function scheduleTick(delay) {
+    if (hidden()) return;
+    const d = Math.max(0, delay);
+    const at = performance.now() + d;
+    if (wakeTimer !== null && at >= wakeAt) return;
+    if (wakeTimer !== null) clearTimeout(wakeTimer);
+    wakeAt = at;
+    wakeTimer = setTimeout(runFrame, d);
+  }
+
+  /**
+   * Something the picture depends on just changed. Tick promptly, but never
+   * faster than 30fps: mousemove alone can fire hundreds of times a second.
+   */
+  function wake() {
+    scheduleTick(ACTIVE_MS - (performance.now() - lastTick));
+  }
+
+  /** How long until the current clip shows a different frame. */
+  function msToNextFrame(now) {
+    const c = Animations.CLIPS[clip];
+    if (!c) return 250;
+    const total = Animations.clipDuration(clip);
+    let t = now - clipStart;
+    if (c.loop && total > 0) t = t % total;
+    let acc = 0;
+    for (let i = 0; i < c.durations.length; i++) {
+      acc += c.durations[i];
+      if (t < acc) return acc - t;
+    }
+    // A finished one-shot clip is about to hand over to its `next`.
+    return ACTIVE_MS;
+  }
+
+  function nextDelay(now, dir) {
+    if (sleeping) return SLEEP_MS;
+    const active =
+      drag || overPip || body.climbing || !body.grounded ||
+      dir !== 0 || Math.abs(body.vx) > 0.5 || gotoX !== null ||
+      localClip !== null || particleList.length > 0 || bubble !== null ||
+      sway !== 0 || Math.abs(body.squash - 1) > 0.01;
+    if (active) return ACTIVE_MS;
+    return Math.min(MAX_IDLE_MS, Math.max(ACTIVE_MS, msToNextFrame(now)));
+  }
+
+  /** Is the pointer close enough that its position changes what we draw? */
+  function cursorMatters() {
+    if (overPip || drag) return true;
+    const c = pipCenter();
+    return Math.hypot(cursor.x - c.x, cursor.y - c.y) < LOOK_RANGE + 60;
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!hidden()) wake();
+  });
 
   function updateParticles(dt) {
     if (!particleList.length) return;
@@ -604,7 +708,10 @@
     if (now - stuckCheckAt < 1000) return;
     stuckCheckAt = now;
 
-    const walking = clip === 'walk' || clip === 'run';
+    // Judge what is on screen, not the clip name: applyStandStill already
+    // swaps a stationary walk for a standing frame, so only a walk frame that
+    // is genuinely being drawn without travel is the bug.
+    const walking = /^(walk|run)_/.test(currentFrame);
     const moved = Math.abs(body.x - stuckLastX);
     stuckLastX = body.x;
 
@@ -716,6 +823,10 @@
     if (drag && (Math.abs(e.clientX - drag.startX) > 3 || Math.abs(e.clientY - drag.startY) > 3)) {
       drag.moved = true;
     }
+    // Hover decides whether the window is solid under the pointer, so it runs
+    // on input rather than waiting for the next (possibly distant) idle tick.
+    updateHover();
+    if (cursorMatters()) wake();
   });
 
   window.addEventListener('mousedown', (e) => {
@@ -734,6 +845,7 @@
     body.held = true;
     gotoX = null;
     notify('pip:grabbed', {});
+    wake();
   });
 
   window.addEventListener('mouseup', (e) => {
@@ -755,6 +867,7 @@
       handleClick(e.clientX, e.clientY);
     }
     updateHover();
+    wake();
   });
 
   /**
@@ -783,6 +896,7 @@
     const scaleChanged = s.scale !== settings.scale;
     settings = Object.assign({}, settings, s);
     if (flavourChanged || scaleChanged || !Object.keys(frameCache).length) prerender();
+    wake();
   });
 
   bridge.on('pip:bounds', (b) => {
@@ -793,6 +907,7 @@
     // changing scaling live) means the cache has to be rebuilt.
     if (dpr !== before) prerender();
     Physics.clamp(body, worldBounds());
+    wake();
   });
 
   bridge.on('pip:state', (s) => {
@@ -809,6 +924,7 @@
     if (sleeping && !particleList.some((p) => p.kind === 'zzz')) {
       Particles.spawn(particleList, 'zzz', body.x, body.y - settings.scale * 10, 3);
     }
+    wake();
   });
 
   bridge.on('pip:cursor', (c) => {
@@ -816,11 +932,18 @@
     // overlay is click-through and receiving no DOM events.
     if (!drag) trackCursor(c.x, c.y, performance.now());
     cursor.inside = c.inside;
+    // A pointer across the screen changes nothing we draw, so it must not
+    // keep the loop awake at 20Hz while you work elsewhere.
+    if (cursorMatters()) {
+      updateHover();
+      wake();
+    }
   });
 
   bridge.on('pip:say', (payload) => {
     if (!payload || !payload.text) return;
     bubble = Bubbles.create(payload.text, Date.now(), payload.ms);
+    wake();
   });
 
   bridge.on('pip:particles', (payload) => {
@@ -830,16 +953,21 @@
     Particles.spawn(particleList, payload.kind, body.x, y, payload.count || 3,
       { dir: -body.facing });
     lastDrawKey = '';
+    wake();
   });
 
   bridge.on('pip:pomodoro', (p) => {
+    const wasRunning = pomodoro.running;
     pomodoro = Object.assign({}, pomodoro, p);
+    // The ring only needs repainting while there is a ring to paint.
+    if (pomodoro.running || wasRunning) wake();
   });
 
   bridge.on('pip:goto', (p) => {
     if (!p) return;
     // x:null means "stop chasing" - Pip gives up and goes back to pottering.
     gotoX = typeof p.x === 'number' ? p.x : null;
+    wake();
   });
 
   bridge.on('pip:reset', () => {
@@ -849,6 +977,7 @@
     gotoX = null;
     stopClimb();
     lastDrawKey = '';
+    wake();
   });
 
   /* ---------------------------------------------------------------- *
@@ -862,6 +991,7 @@
         lastDrawKey = '';
         // Main owns the speech, so it needs to know when things get dire.
         notify('pip:battery', { level: b.level, charging: b.charging });
+        wake();
       };
       read();
       b.addEventListener('levelchange', read);
@@ -885,7 +1015,7 @@
   Physics.respawn(body, worldBounds());
   lastTick = performance.now();
   clipStart = lastTick;
-  requestAnimationFrame(tick);
+  wake();
 
   // Exposed so the smoke test can drive the renderer without a real user.
   window.__pip = {

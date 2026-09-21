@@ -120,6 +120,9 @@ function step(body, dt, bounds, opts) {
     body.vx = opts.walkSpeed;
   }
 
+  // Remembered so a landing can mean what it says: the moment of touchdown.
+  const wasGrounded = body.grounded;
+
   body.vy += GRAVITY * dt;
   if (body.vy > MAX_FALL) body.vy = MAX_FALL;
 
@@ -136,7 +139,12 @@ function step(body, dt, bounds, opts) {
       body.vy = 0;
       body.grounded = true;
     }
-    if (!events.landed && impact > 40) {
+    // Only a real touchdown counts. A body already standing on the floor
+    // still picks up one step of gravity and is pushed back up, and that used
+    // to be reported as a fresh landing on every frame - which in turn kept
+    // the renderer's walk/stop logic permanently switched off while Pip was
+    // on the ground.
+    if (!wasGrounded && impact > 40) {
       events.landed = true;
       events.speed = impact;
       // Flatten and widen on impact, proportional to how hard Pip hit.
