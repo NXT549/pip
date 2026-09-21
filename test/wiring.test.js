@@ -138,3 +138,12 @@ test('no module is left with a TODO or a stub', () => {
     assert.ok(!/not implemented|unimplemented/i.test(src), file + ' mentions something unimplemented');
   }
 });
+
+test('pressing on Pip is not reported as a grab until he is lifted', () => {
+  // Main only lets go of a grab on a drop. When mousedown sent pip:grabbed,
+  // every plain click left Pip dangling, and `held` outranks every state.
+  const down = rendererSrc.split("addEventListener('mousedown'")[1].split('\n  });')[0];
+  assert.ok(!down.includes('pip:grabbed'), 'mousedown must not report a grab');
+  assert.ok(/drag\.moved = true;\s*[\s\S]{0,400}notify\('pip:grabbed'/.test(rendererSrc),
+    'the grab should be reported once the pointer actually moves Pip');
+});

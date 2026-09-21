@@ -13,7 +13,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { DEFAULTS, mergeDefaults, createStorage } = require('../src/main/storage.js');
+const {
+  DEFAULTS, NUMBER_LIMITS, CHOICES, USER_KEYS, mergeDefaults, cleanPatch, createStorage
+} = require('../src/main/storage.js');
 
 /** A throwaway userData folder, removed when the test finishes. */
 function tempDir(t) {
@@ -196,4 +198,85 @@ test('a file saved with a UTF-8 byte-order mark is read, not treated as corrupt'
   assert.strictEqual(data.mood, 81);
   const backups = fs.readdirSync(dir).filter((f) => f.includes('corrupt'));
   assert.deepStrictEqual(backups, [], 'a BOM should not trigger the corrupt-file path');
+});
+
+/* ------------------------------------------------------------------ *
+ * Values of the right type can still be nonsense
+ * ------------------------------------------------------------------ */
+
+test('load repairs settings that are the right type but nonsense', (t) => {
+  // A negative drowsiness threshold left Pip permanently drowsy; an unknown
+  // flavour drew cherry while the picker showed nothing selected.
+  const dir = tempDir(t);
+  writeData(dir, {
+    drowsyAfter: -10,
+    waterInterval: 100000,
+    pomodoroWork: 12.6,
+    flavor: 'banana',
+    petSize: 'huge',
+    activityLevel: 'lime',
+    notifications: false
+  });
+
+  const data = createStorage(dir, fakeLog()).load();
+
+  assert.strictEqual(data.drowsyAfter, NUMBER_LIMITS.drowsyAfter[0]);
+  assert.strictEqual(data.waterInterval, NUMBER_LIMITS.waterInterval[1]);
+  assert.strictEqual(data.pomodoroWork, 13, 'minutes are whole');
+  assert.strictEqual(data.flavor, DEFAULTS.flavor);
+  assert.strictEqual(data.petSize, DEFAULTS.petSize);
+  assert.strictEqual(data.activityLevel, DEFAULTS.activityLevel);
+  assert.strictEqual(data.notifications, false, 'good values are left alone');
+});
+
+test('a settings patch keeps only user settings, cleaned', () => {
+  const patch = cleanPatch({
+    flavor: 'grape',
+    exhaustedAfter: 0,
+    pomodoroLongEvery: 99,
+    launchAtLogin: 'yes',
+    activityLevel: 'hyper',
+    mood: 100,
+    hidden: true,
+    today: { pomodoros: 999 }
+  });
+  assert.deepStrictEqual(patch, {
+    flavor: 'grape',
+    activityLevel: 'hyper',
+    pomodoroLongEvery: 12,
+    exhaustedAfter: 5
+  });
+});
+
+test('a patch that is not an object is an empty patch', () => {
+  assert.deepStrictEqual(cleanPatch(null), {});
+  assert.deepStrictEqual(cleanPatch('flavor'), {});
+  assert.deepStrictEqual(cleanPatch({ flavor: NaN, pomodoroWork: Infinity }), {});
+});
+
+test('every user setting has a default and a rule', () => {
+  for (const key of USER_KEYS) {
+    assert.ok(key in DEFAULTS, key + ' has no default');
+    assert.deepStrictEqual(cleanPatch({ [key]: DEFAULTS[key] }), { [key]: DEFAULTS[key] },
+      'the default for ' + key + ' does not pass its own rule');
+  }
+});
+
+test('the settings window offers exactly the ranges and choices main accepts', () => {
+  // The window clamps before sending and main clamps on receipt. If the two
+  // drift apart, a value the window allows is silently changed by main.
+  const html = fs.readFileSync(path.join(__dirname, '..', 'settings', 'settings.html'), 'utf8');
+  for (const key of Object.keys(NUMBER_LIMITS)) {
+    const input = html.match(new RegExp('<input type="number" id="' + key + '"[^>]*>'));
+    assert.ok(input, 'settings.html has no number field for ' + key);
+    const min = Number(input[0].match(/min="(\d+)"/)[1]);
+    const max = Number(input[0].match(/max="(\d+)"/)[1]);
+    assert.deepStrictEqual([min, max], NUMBER_LIMITS[key], key + ' range differs');
+  }
+  for (const key of ['petSize', 'activityLevel']) {
+    const select = html.match(new RegExp('<select id="' + key + '">([^]*?)</select>'));
+    assert.ok(select, 'settings.html has no select for ' + key);
+    const options = [...select[1].matchAll(/value="([^"]+)"/g)].map((m) => m[1]);
+    assert.deepStrictEqual(options, CHOICES[key], key + ' choices differ');
+  }
 });

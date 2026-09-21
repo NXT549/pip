@@ -25,6 +25,14 @@ if (typeof module !== 'undefined' && module.exports) { module.exports = X; }
 
 so the same file works in the browser context and under `require()` in tests.
 
+**Every page script is wrapped in `(function () { ... })();` and declares
+nothing at the top level.** Plain `<script>` tags share one global scope, so a
+top-level `function clamp` in one file silently replaces the one in another.
+That once broke every particle and every wall collision in the real app, while
+the unit tests, which each `require()` a module into its own scope, all passed.
+`test/scope.test.js` loads the overlay's scripts into one shared scope, the way
+the browser does, and fails on any top-level declaration.
+
 **Security**: `contextIsolation: true`, `nodeIntegration: false`,
 `sandbox: true`. `preload.js` is the only bridge and exposes exactly one
 global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
@@ -159,6 +167,12 @@ held > sleeping > celebrating > thirsty > exhausted > drowsy > reaction > idle
 A lower-priority state never interrupts a higher one. Inside `idle`, a running
 idle behaviour is left alone until it finishes.
 
+A reaction or an idle behaviour lasts exactly as long as its clip
+(`Animations.clipDuration`), so Pip never stands frozen in the idle pose
+waiting for one to officially end. The only exception is `dizzy` after a
+throw, which is held for 2.6 s because Pip is usually still in the air when
+it starts.
+
 ```js
 brain.STATE_PRIORITY // ['held','sleeping','celebrating','thirsty','exhausted','drowsy','reaction','idle']
 brain.decide(input) -> { state, clip, walkDir, walkSpeed, wander }
@@ -272,23 +286,23 @@ Only these names exist. `preload.js` enforces the list.
 |---|---|
 | `pip:settings` | `{ flavor, scale, activityLevel, quiet, nightcap, dev }` |
 | `pip:bounds` | `{ left, top, right, bottom, width, height }` — overlay DIPs |
-| `pip:state` | `{ state, clip, walkDir, walkSpeed }` |
+| `pip:state` | `{ state, clip, walkDir, walkSpeed, seq }` — `seq` is non-zero for a reaction or behaviour and changes whenever a new one starts, so the renderer replays a repeated clip from its first frame |
 | `pip:cursor` | `{ x, y, inside }` — overlay-relative DIPs |
 | `pip:say` | `{ text, ms }` |
 | `pip:particles` | `{ kind, count }` |
 | `pip:pomodoro` | `{ running, phase, remainingMs, totalMs }` |
 | `pip:goto` | `{ x }` — trot to this overlay x; `x: null` cancels |
-| `pip:reset` | *(none)* |
+| `pip:reset` | *(none)*, or `{ x }` — drop in from the top, at `x` when given |
 
 ### renderer → main
 
 | Channel | Payload |
 |---|---|
-| `pip:ready` | `{}` |
+| `pip:ready` | `{}` — main answers by making the overlay click-through, clearing `held`, and resending the full state |
 | `pip:set-interactive` | `{ interactive: boolean }` |
-| `pip:grabbed` | `{}` |
-| `pip:dropped` | `{ x, y }` |
-| `pip:click` | `{ x, y }` — one message per physical click; main classifies the pattern via `clicks.js` |
+| `pip:grabbed` | `{}` — sent once the pointer has actually moved Pip, never on mousedown alone |
+| `pip:dropped` | `{ x, y, speed, height }` — throw speed in DIP/s and height above the floor in DIPs; only a rough drop makes Pip dizzy |
+| `pip:click` | `{ x, y }` — one message per physical click; main classifies the pattern via `clicks.js`. A click also clears `held` |
 | `pip:pet` | `{}` — cursor rested on Pip for ~1s |
 | `pip:startle` | `{}` — fast jerky cursor movement nearby |
 | `pip:climb` | `{ climbing: boolean }` |
@@ -300,10 +314,10 @@ Only these names exist. `preload.js` enforces the list.
 
 | Channel | Direction | Payload |
 |---|---|---|
-| `settings:get` | invoke | → `{ settings, today }` |
-| `settings:set` | send | `{ patch }` — partial settings |
+| `settings:get` | invoke | → `{ settings, today, pomodoroRunning, quiet, hidden }` |
+| `settings:set` | send | `{ patch }` — partial settings. Main keeps only the user-editable keys (`storage.USER_KEYS`) and clamps every value (`storage.cleanPatch`) |
 | `settings:action` | send | `{ action }` — see the action list below |
-| `settings:update` | main → window | `{ settings, today }` |
+| `settings:update` | main → window | same shape as `settings:get` |
 
 ### debug window (dev only)
 
@@ -354,8 +368,14 @@ intervals, so system sleep can never skew a Pomodoro or a work streak.
 | pomodoro | 25 / 5, long break 15 after every 4 (all configurable) |
 | sleeping | you have been away ≥ 5 min |
 
-**Dev mode** divides every duration by 60 and makes idle behaviours more
-frequent. It uses a separate userData folder and registers no login item.
+**Dev mode** divides every *work* timer above by 60 and makes idle behaviours
+more frequent. Animation lengths (reactions, behaviours, the chase) are never
+scaled. A reaction squeezed to 30 ms is invisible, which defeats the point of
+dev mode. It uses a separate userData folder and registers no login item.
+
+Settings loaded from disk are repaired, not just type-checked. A number
+outside the range the settings window allows is clamped, and an unknown
+flavour, size or activity level falls back to its default.
 
 ---
 

@@ -12,7 +12,7 @@ never steal focus, and never appear in Alt+Tab.
 
 ## Installing Pip
 
-1. Run **`Pip-Setup-1.0.0.exe`**.
+1. Run **`Pip-Setup-1.1.0.exe`**.
 2. Windows will almost certainly show a blue **"Windows protected your PC"**
    box. This is SmartScreen reacting to an installer that has not been
    code-signed — signing certificates cost money and this one is unsigned.
@@ -26,7 +26,7 @@ never steal focus, and never appear in Alt+Tab.
 To remove Pip: **Settings → Apps → Installed apps → Pip → Uninstall**, the same
 as any other Windows app.
 
-There is also **`Pip-Portable-1.0.0.exe`**, a single self-contained file that
+There is also **`Pip-Portable-1.1.0.exe`**, a single self-contained file that
 runs without installing anything. The portable build never registers itself to
 launch at login.
 
@@ -46,10 +46,14 @@ his day.
 | Click him | A happy reaction or a passing remark |
 | Double-click him | Eats a snack |
 | Click him five times fast | Puffs up and scoots off in a huff |
-| Drag him | Dangles with all four legs paddling; throw him and he tumbles, lands and shakes off the dizziness |
+| Drag him | Dangles with all four legs paddling. Set him down gently and he carries on; throw him, or drop him from high up, and he tumbles, sees stars and shakes off the dizziness |
+| Drag him onto another monitor | He moves over and drops in under the pointer |
 | Right-click him | The full menu |
 | Move the mouse sharply near him | Startles him |
-| Wander off for five minutes | He plays alone for a while, then curls up and sleeps |
+| Wander off for five minutes | He plays alone for a while, then curls up and sleeps. He wakes and greets you within a second of you coming back |
+
+When Pip trots into the edge of the screen he sometimes climbs it, hangs for a
+moment and drops off. Otherwise he turns round and carries on.
 
 The tray icon's right-click menu and Pip's right-click menu are the same:
 Start/Stop Pomodoro, I drank water, Feed Pip, Call Pip, Quiet mode for 1 hour,
@@ -77,10 +81,11 @@ electron-builder used for Squirrel installers, which Pip does not build. Both
 longer uses an install script — it fetches its binary on first use, so the
 first `npm start` after a clean install pauses briefly to download it.
 
-Dev mode divides every duration by 60 (a 25-minute Pomodoro takes 25 seconds),
-makes idle behaviours far more frequent, uses a **separate settings folder** so
-you do not pollute your real stats, registers no login item, and adds a
-**Debug panel** to the menus:
+Dev mode divides every work timer by 60 (a 25-minute Pomodoro takes 25
+seconds) while animations keep their real length, so every reaction can still
+be seen. It also makes idle behaviours far more frequent, uses a **separate
+settings folder** so you do not pollute your real stats, registers no login
+item, and adds a **Debug panel** to the menus:
 
 ```bash
 npm run dev
@@ -100,14 +105,25 @@ npm run smoke
 
 `npm test` runs the unit tests on Node's built-in runner — state priority, work
 accumulation and break resets, Pomodoro transitions and restart recovery, water
-scheduling and the midnight reset, mood, click patterns, physics, storage,
-sprite validation and palette completeness. It also runs a wiring check that
-fails if any animation clip, speech situation or particle kind is unreachable,
-if an IPC channel is known to only one side, or if a menu action has no
-handler — the kind of dead wiring that reads fine in a single file.
+scheduling and the midnight reset, mood, click patterns, physics, storage and
+settings validation, sprite validation and palette completeness. It also runs:
+
+- a **wiring check** that fails if any animation clip, speech situation or
+  particle kind is unreachable, if an IPC channel is known to only one side, or
+  if a menu action has no handler — the kind of dead wiring that reads fine in
+  a single file;
+- a **scope check** that loads the overlay's scripts into one shared global
+  scope, the way the browser does, and fails if any of them can overwrite
+  another's names;
+- **`test/main.test.js`**, which runs the real `main.js` against a fake
+  Electron on a mock clock and drives it through the renderer's own IPC
+  channels. It covers clicks, drops, reactions, quiet mode, waking from sleep,
+  crash recovery and settings validation. That glue is where most of Pip's bugs
+  have lived.
 
 `npm run smoke` launches the **real app** with `--smoke`: it draws its first
-frame, plays every animation clip in every flavour offscreen, opens and closes
+frame, plays every animation clip in every flavour offscreen, checks that every
+particle kind actually paints pixels and that the walls hold, opens and closes
 the settings window, and exits 0. Any exception, or twenty seconds of silence,
 fails it. This is the check that proves Pip actually runs, as opposed to merely
 compiling.
@@ -118,7 +134,7 @@ compiling.
 npm run dist
 ```
 
-Produces `dist/Pip-Setup-1.0.0.exe` and `dist/Pip-Portable-1.0.0.exe`. Icons are
+Produces `dist/Pip-Setup-1.1.0.exe` and `dist/Pip-Portable-1.1.0.exe`. Icons are
 regenerated automatically first.
 
 ---
@@ -163,7 +179,11 @@ A few things worth knowing:
 - **Every timer is derived from a stored start timestamp**, never from counting
   ticks, so suspending your machine mid-Pomodoro does not corrupt it.
 - **Activity is measured with `powerMonitor.getSystemIdleTime()`** polled every
-  ten seconds. There are no keyloggers and no input hooks.
+  ten seconds, and every second while Pip sleeps so he is up as soon as you are
+  back. There are no keyloggers and no input hooks.
+- **Every overlay script is wrapped in its own function scope.** They are plain
+  `<script>` tags sharing one global scope, and two of them once defined a
+  `clamp` of their own. `test/scope.test.js` keeps that from happening again.
 - **Frames are pre-rendered** to offscreen canvases at startup for the current
   flavour and scale, and re-rendered when either changes.
 

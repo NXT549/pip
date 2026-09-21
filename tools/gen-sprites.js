@@ -489,29 +489,34 @@ function emit() {
   lines.push('');
   lines.push("'use strict';");
   lines.push('');
-  lines.push('const FRAME_SIZE = ' + SIZE + ';');
+  // Scoped like every other overlay script: they all share one global scope.
+  lines.push('// Every overlay script shares one global scope, so nothing here may be');
+  lines.push('// declared at the top level - see ARCHITECTURE.md section 1.');
+  lines.push('(function () {');
+  lines.push('  const FRAME_SIZE = ' + SIZE + ';');
   lines.push('');
-  lines.push('const FRAMES = {');
+  lines.push('  const FRAMES = {');
   names.forEach((name, i) => {
-    lines.push('  ' + name + ': [');
+    lines.push('    ' + name + ': [');
     frames[name].forEach((row, r) => {
-      lines.push("    '" + row + "'" + (r === SIZE - 1 ? '' : ','));
+      lines.push("      '" + row + "'" + (r === SIZE - 1 ? '' : ','));
     });
-    lines.push('  ]' + (i === names.length - 1 ? '' : ','));
+    lines.push('    ]' + (i === names.length - 1 ? '' : ','));
   });
-  lines.push('};');
+  lines.push('  };');
   lines.push('');
-  lines.push('const FRAME_NAMES = Object.keys(FRAMES);');
+  lines.push('  const FRAME_NAMES = Object.keys(FRAMES);');
   lines.push('');
-  lines.push('const Sprites = { FRAME_SIZE, FRAMES, FRAME_NAMES };');
+  lines.push('  const Sprites = { FRAME_SIZE, FRAMES, FRAME_NAMES };');
   lines.push('');
-  lines.push("if (typeof window !== 'undefined') {");
-  lines.push('  window.Pip = window.Pip || {};');
-  lines.push('  window.Pip.Sprites = Sprites;');
-  lines.push('}');
-  lines.push("if (typeof module !== 'undefined' && module.exports) {");
-  lines.push('  module.exports = Sprites;');
-  lines.push('}');
+  lines.push("  if (typeof window !== 'undefined') {");
+  lines.push('    window.Pip = window.Pip || {};');
+  lines.push('    window.Pip.Sprites = Sprites;');
+  lines.push('  }');
+  lines.push("  if (typeof module !== 'undefined' && module.exports) {");
+  lines.push('    module.exports = Sprites;');
+  lines.push('  }');
+  lines.push('})();');
   lines.push('');
 
   const out = path.join(__dirname, '..', 'src', 'renderer', 'sprites.js');

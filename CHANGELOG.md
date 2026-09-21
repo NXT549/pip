@@ -1,0 +1,75 @@
+# Changelog
+
+## 1.1.0
+
+A review of 1.0.0 as it actually ran, starting from its own log. Every fix in
+the first section, and most of the rest, has a test that fails on 1.0.0. The
+renderer-only behaviour changes (walls, drop-in position, z's, cursor speed)
+were checked by running the app.
+
+### Fixed — things that were broken in the real app
+
+- **Particles never appeared, and Pip could walk through walls.** The overlay's
+  scripts share one global scope, and `bubbles.js` redefined both `clamp`
+  (from `physics.js`) and `create` (from `particles.js`). Every heart, zzz,
+  sparkle, confetti, sweat drop, water drop and star was secretly an invisible
+  speech bubble that never expired. Once one existed, the render loop could
+  never idle. `Physics.step` never clamped, so Pip slid off-screen until a
+  respawn caught him. That is the `x 1283 right of 1216` in the 1.0.0 log.
+  Every renderer module is now scope-wrapped.
+- **One click left Pip dangling forever.** Mousedown reported a grab, but only
+  a drop let go. So after any plain click, `held` (which outranks everything)
+  stuck. Click, double-click and five-click reactions never showed, idle
+  behaviours stopped, and he could not fall asleep. A grab is now reported only
+  once Pip is actually lifted, and a click always lets go.
+- **A renderer crash could leave the whole desktop unclickable.** After a
+  reload, main never handed the mouse back if the overlay had been solid.
+- **Dropping a file on Pip opened it in his place**, inside a transparent,
+  always-on-top, full-screen window. Navigation is now blocked in every window.
+- **"Quiet mode" never said so.** It switched itself on before its own
+  announcement, then silenced it.
+
+### Fixed — behaviour
+
+- Reactions and idle behaviours last exactly as long as their clips. They used
+  to leave Pip frozen in the idle pose for up to a few seconds afterwards, and
+  a nap was cut off partway.
+- Petting or clicking twice replays the reaction instead of being ignored.
+- Dev mode no longer squeezes animations to 1/60 of their length (a 30 ms
+  reaction). Only work timers are sped up.
+- The 25% wall-climb chance was rolled on every frame, so Pip climbed every
+  wall he touched. It is now rolled once per bump, and otherwise he turns round
+  instead of standing nose to the wall.
+- Pip always dropped in against the left wall at startup. He now drops in at
+  the middle of the screen.
+- A gentle set-down no longer makes Pip dizzy; only a throw or a real drop does.
+  The stars now circle where he lands, not where he was let go.
+- Being let go over another monitor drops Pip in under the pointer there.
+- Waking from sleep, then locking, then unlocking greeted you at the lock
+  screen and again after it. Now it greets you once, after you are in.
+- Pip wakes within a second of you coming back, not up to ten.
+- Sleeping Pip keeps puffing z's rather than one burst.
+- Unplugging the charger no longer makes Pip sulk at cheerful lines.
+- Spurious startles from mixing two cursor sources a millisecond apart.
+- The tray menu still showed quiet mode as on after it had expired.
+- Grabbing Pip could make him jump to a stale pointer position.
+- Moving to a monitor with a different scale factor could leave him blurry.
+
+### Hardening
+
+- Settings are validated on load and from the settings window: numbers are
+  clamped to the window's ranges, unknown choices fall back to defaults, and
+  the window can no longer write runtime state such as mood or the Pomodoro.
+- Pomodoro progress goes to the renderer once a second instead of ten times.
+- Notification icons load from inside the packaged app.
+- The streak is saved when Windows signs out or shuts down.
+- The settings window's buttons say what they will do (End quiet mode,
+  Show/Hide Pip).
+
+### Tests
+
+- `test/scope.test.js` loads the overlay's scripts the way the browser does.
+- `test/main.test.js` runs the real `main.js` against a fake Electron on a
+  mock clock.
+- The smoke test now checks, in the real app, that every particle kind paints
+  pixels and that the walls hold.

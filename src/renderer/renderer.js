@@ -49,8 +49,24 @@
   const MAX_SWAY = 0.38;
 
   const CLIMB_SPEED = 130;         // DIP/s up a wall
-  const CLIMB_CHANCE = 0.25;       // on bumping a wall while wandering
+  /**
+   * Rolled once per bump. It used to be rolled on every frame Pip stood
+   * against the wall, which at 30fps made a climb all but certain.
+   */
+  const CLIMB_CHANCE = 0.25;
   const HANG_MS = 2600;
+
+  /** Land harder than this (DIP/s) and Pip sees stars. */
+  const STARS_SPEED = 700;
+  /** A fresh puff of z's this often while Pip sleeps. */
+  const ZZZ_EVERY_MS = 2800;
+  /**
+   * Cursor samples closer together than this are not used for its speed.
+   * Main's 20Hz poll and the DOM's own mousemoves interleave, sometimes a
+   * millisecond apart, and dividing a few pixels by that read as a flick fast
+   * enough to startle Pip while the pointer was barely moving.
+   */
+  const MIN_VELOCITY_DT = 0.016;   // seconds
 
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d', { alpha: true });
@@ -85,8 +101,18 @@
   let walkDir = 0;
   let walkSpeed = 0;
   let gotoX = null;
+  /**
+   * The wander direction Pip turned away from at a wall. Held until main
+   * picks a new direction, or he would walk straight back into it.
+   */
+  let turnedFrom = 0;
+  /** The last reaction/behaviour main started, so a repeat replays its clip. */
+  let lastSeq = 0;
+  let lastZzzAt = 0;
 
   let cursor = { x: -9999, y: -9999, inside: false, t: 0, vx: 0, vy: 0 };
+  /** The last sample the cursor's speed was measured from. */
+  let velocityFrom = { x: 0, y: 0, t: 0 };
   let overPip = false;
   let interactive = false;
   let hoverSince = 0;
@@ -124,6 +150,8 @@
   let lastTick = 0;
   let sleeping = false;
   let ready = false;
+  /** Has Pip dropped in on the real screen yet, rather than the placeholder? */
+  let placed = false;
 
   /* ---------------------------------------------------------------- *
    * Pre-rendering
@@ -336,41 +364,49 @@
    * making for the very top - a full-height climb on a 1080p screen takes
    * twenty seconds and he would let go long before the hang ever began.
    */
-  function updateClimbing(now, wb) {
+  function updateClimbing(now) {
     if (drag || body.held) {
       if (body.climbing) stopClimb(now);
       return;
     }
+    if (!body.climbing) return;
 
-    if (body.climbing) {
-      if (body.y <= climbTargetY) {
-        // Made it. Hang here for a bit, then let go.
-        body.vy = 0;
-        setLocalClip('hang', now);
-        if (!hangUntil) hangUntil = now + HANG_MS;
-        if (now >= hangUntil) {
-          stopClimb(now);
-          body.vy = 0;
-        }
-      } else if (now >= climbUntil) {
-        // Gave up part way; drop from here.
+    if (body.y <= climbTargetY) {
+      // Made it. Hang here for a bit, then let go.
+      body.vy = 0;
+      setLocalClip('hang', now);
+      if (!hangUntil) hangUntil = now + HANG_MS;
+      if (now >= hangUntil) {
         stopClimb(now);
         body.vy = 0;
-      } else {
-        setLocalClip('climb', now);
       }
-      return;
+    } else if (now >= climbUntil) {
+      // Gave up part way; drop from here.
+      stopClimb(now);
+      body.vy = 0;
+    } else {
+      setLocalClip('climb', now);
     }
+  }
 
-    // Bumped a wall while wandering: sometimes go up it.
-    if (!body.grounded || walkDir === 0) return;
-    const atLeft = body.x <= wb.left + 1 && walkDir < 0;
-    const atRight = body.x >= wb.right - 1 && walkDir > 0;
-    if (!atLeft && !atRight) return;
-    if (Math.random() > CLIMB_CHANCE) return;
+  /**
+   * Pip has wandered into a wall. Now and then he goes up it; otherwise he
+   * turns round and carries on the other way, instead of standing nose to
+   * the wall until main next changes its mind.
+   *
+   * @param {'left'|'right'} side
+   */
+  function bumpedWall(side, now, wb) {
+    if (pipState === 'idle' && Math.random() < CLIMB_CHANCE) {
+      startClimb(side, now, wb);
+    } else {
+      turnedFrom = walkDir;
+    }
+  }
 
-    body.climbing = atLeft ? 'left' : 'right';
-    body.facing = atLeft ? -1 : 1;
+  function startClimb(side, now, wb) {
+    body.climbing = side;
+    body.facing = side === 'left' ? -1 : 1;
     body.vy = -CLIMB_SPEED;
     // Somewhere in the upper half of the screen, never above the ceiling.
     const span = wb.bottom - wb.top;
@@ -532,16 +568,20 @@
       if (Math.abs(sway) < 0.004) sway = 0;
     }
 
-    updateClimbing(now, wb);
+    updateClimbing(now);
 
     // "Call Pip" overrides the wander until he arrives. resolveWalk also
     // refuses to walk into a wall, and abandons a target that cannot be
-    // reached - both of which used to leave Pip trotting on the spot.
-    let dir = walkDir;
+    // reached - both of which used to leave Pip trotting on the spot. A wall
+    // met while wandering is his to deal with: climb it or turn round.
+    if (turnedFrom !== 0 && walkDir !== turnedFrom) turnedFrom = 0;
+    let dir = turnedFrom !== 0 ? -walkDir : walkDir;
     if (body.grounded && !drag && !body.climbing) {
-      const walk = Physics.resolveWalk(body, walkDir, gotoX, wb, settings.scale * 4);
+      const wandering = gotoX === null;
+      const walk = Physics.resolveWalk(body, dir, gotoX, wb, settings.scale * 4);
       dir = walk.dir;
       gotoX = walk.gotoX;
+      if (walk.blocked && wandering && turnedFrom === 0) bumpedWall(walk.blocked, now, wb);
     }
 
     const opts = {};
@@ -570,9 +610,13 @@
       // flat and he has to pick himself up again.
       if (events.speed > 900) {
         setLocalClip('getup', now);
-        Particles.spawn(particleList, 'star', body.x, body.y - settings.scale * 18, 3);
       } else if (events.speed > 260) {
         setLocalClip('land', now);
+      }
+      // Stars circle where his head is on impact, so they are spawned here
+      // rather than by main when he is let go, mid-air, somewhere above.
+      if (events.speed > STARS_SPEED) {
+        Particles.spawn(particleList, 'star', body.x, body.y - settings.scale * 18, 4);
       }
       if (events.speed > 420) Particles.spawn(particleList, 'sparkle', body.x, body.y, 2);
       landedUntil = now + 500;
@@ -588,12 +632,14 @@
     } else if (!body.climbing && now >= landedUntil) {
       if (!body.grounded && body.vy > 120) {
         setLocalClip('fall', now);
-      } else if (dir !== 0 && body.grounded && pipState === 'idle'
+      } else if (dir !== 0 && body.grounded && (pipState === 'idle' || gotoX !== null)
                  && Math.abs(body.vx) > MIN_WALK_VX) {
         // Anything brisker than a stroll reads as a run. The speed check is
         // what stops the moonwalk: Physics.clamp zeroes vx when Pip is pressed
         // against a wall, so a walk cycle with no travel cannot be drawn at
-        // all - whatever pinned the direction in the first place.
+        // all - whatever pinned the direction in the first place. A trot to a
+        // called-for spot always walks; otherwise only an idle Pip does, so a
+        // huff still scoots in its own pose.
         setLocalClip(Math.abs(body.vx) > RUN_SPEED ? 'run' : 'walk', now);
       } else if (localClip && (localClip === 'walk' || localClip === 'run' || localClip === 'fall')
                  && body.grounded && (dir === 0 || Math.abs(body.vx) <= MIN_WALK_VX)) {
@@ -606,6 +652,11 @@
     checkStuck(now, dir, wb);
 
     advanceAnimation(now);
+    if (sleeping && now - lastZzzAt >= ZZZ_EVERY_MS) {
+      lastZzzAt = now;
+      Particles.spawn(particleList, 'zzz',
+        body.x + body.facing * settings.scale * 4, body.y - settings.scale * 16, 3);
+    }
     updateParticles(dt);
     bubble = bubble ? Bubbles.update(bubble, Date.now()) : null;
     updatePetting(now);
@@ -689,6 +740,10 @@
   }
 
   function nextDelay(now, dir) {
+    // Motion always gets the full rate. A sleeping Pip who is picked up is
+    // still "sleeping" until main's next tick says otherwise, and a drag at
+    // 5fps lags the pointer badly.
+    if (drag || !body.grounded || body.climbing) return ACTIVE_MS;
     if (sleeping) return SLEEP_MS;
     const active =
       drag || overPip || body.climbing || !body.grounded ||
@@ -807,10 +862,16 @@
   }
 
   function trackCursor(x, y, t) {
-    const dt = (t - cursor.t) / 1000;
-    if (dt > 0 && dt < 0.5) {
-      cursor.vx = (x - cursor.x) / dt;
-      cursor.vy = (y - cursor.y) / dt;
+    const dt = (t - velocityFrom.t) / 1000;
+    if (dt >= MIN_VELOCITY_DT) {
+      if (dt < 0.5) {
+        cursor.vx = (x - velocityFrom.x) / dt;
+        cursor.vy = (y - velocityFrom.y) / dt;
+      } else {
+        cursor.vx = 0;
+        cursor.vy = 0;
+      }
+      velocityFrom = { x: x, y: y, t: t };
     }
     cursor.x = x;
     cursor.y = y;
@@ -832,8 +893,19 @@
 
   window.addEventListener('mousemove', (e) => {
     trackCursor(e.clientX, e.clientY, performance.now());
-    if (drag && (Math.abs(e.clientX - drag.startX) > 3 || Math.abs(e.clientY - drag.startY) > 3)) {
+    if (drag && e.buttons === 0) {
+      // The button came up somewhere we never heard about. Let go here rather
+      // than leave Pip glued to the pointer.
+      endDrag(e.clientX, e.clientY);
+      return;
+    }
+    if (drag && !drag.moved &&
+        (Math.abs(e.clientX - drag.startX) > 3 || Math.abs(e.clientY - drag.startY) > 3)) {
       drag.moved = true;
+      // Only now is Pip actually being carried. This used to be sent on
+      // mousedown, which made every plain click a grab - and main only ever
+      // let go on a drop, so one click left him dangling for good.
+      notify('pip:grabbed', {});
     }
     // Hover decides whether the window is solid under the pointer, so it runs
     // on input rather than waiting for the next (possibly distant) idle tick.
@@ -846,6 +918,9 @@
     if (!hitTest(e.clientX, e.clientY)) return;
     e.preventDefault();
     stopClimb();
+    // The drag follows `cursor`, so it must start from this exact point rather
+    // than wherever main's last poll saw the pointer - or Pip jumps on grab.
+    trackCursor(e.clientX, e.clientY, performance.now());
     drag = {
       dx: body.x - e.clientX,
       dy: body.y - e.clientY,
@@ -856,12 +931,16 @@
     };
     body.held = true;
     gotoX = null;
-    notify('pip:grabbed', {});
     wake();
   });
 
   window.addEventListener('mouseup', (e) => {
     if (e.button !== 0 || !drag) return;
+    endDrag(e.clientX, e.clientY);
+  });
+
+  /** Let go of Pip: a throw if he was carried, a click if he never moved. */
+  function endDrag(x, y) {
     const now = performance.now();
     const v = Physics.throwVelocity(drag.samples, now);
     const wasDrag = drag.moved;
@@ -874,13 +953,20 @@
     petSent = false;
 
     if (wasDrag) {
-      notify('pip:dropped', { x: body.x, y: body.y });
+      // How hard, and from how high: main only makes him dizzy for a real
+      // throw, not for being set down gently.
+      notify('pip:dropped', {
+        x: body.x,
+        y: body.y,
+        speed: Math.round(Math.hypot(v.vx, v.vy)),
+        height: Math.round(Math.max(0, worldBounds().bottom - body.y))
+      });
     } else {
-      handleClick(e.clientX, e.clientY);
+      handleClick(x, y);
     }
     updateHover();
     wake();
-  });
+  }
 
   /**
    * Report every physical click and let main decide what the pattern was.
@@ -899,6 +985,11 @@
     notify('pip:context-menu', { x: e.clientX, y: e.clientY });
   });
 
+  // A file dragged onto Pip must not be opened in his place. Main blocks the
+  // navigation too; refusing the drop here means nothing even tries.
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => e.preventDefault());
+
   /* ---------------------------------------------------------------- *
    * Messages from main
    * ---------------------------------------------------------------- */
@@ -913,29 +1004,65 @@
 
   bridge.on('pip:bounds', (b) => {
     bounds = Object.assign({}, bounds, b);
-    const before = dpr;
-    resizeCanvas();
-    // Frames bake scale * devicePixelRatio, so moving to a 200% monitor (or
-    // changing scaling live) means the cache has to be rebuilt.
-    if (dpr !== before) prerender();
-    Physics.clamp(body, worldBounds());
+    refitCanvas();
+    if (!placed) {
+      // The first real size. Dropping in before this used a 100px placeholder
+      // screen, and he always arrived squashed against the left wall.
+      placed = true;
+      Physics.respawn(body, worldBounds());
+    } else {
+      Physics.clamp(body, worldBounds());
+    }
     wake();
   });
+
+  /**
+   * Size the canvas for the current devicePixelRatio. Frames bake
+   * scale * devicePixelRatio, so moving to a 200% monitor (or changing
+   * scaling live) means the cache has to be rebuilt too.
+   */
+  function refitCanvas() {
+    const before = dpr;
+    resizeCanvas();
+    if (dpr !== before) prerender();
+  }
+
+  /**
+   * pip:bounds arrives the moment main moves the window, which can be before
+   * Chromium has picked up the new display's scale factor. So watch the ratio
+   * itself as well - otherwise Pip is drawn blurry, or the wrong size, until
+   * something else happens to trigger a resize.
+   */
+  function watchPixelRatio() {
+    const query = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
+    query.addEventListener('change', () => {
+      refitCanvas();
+      wake();
+      watchPixelRatio();
+    }, { once: true });
+  }
 
   bridge.on('pip:state', (s) => {
     const now = performance.now();
     pipState = s.state || 'idle';
+    // A new reaction or behaviour plays from its first frame, even when it is
+    // the same clip as the one already showing - pet him twice, he beams twice.
+    const replay = typeof s.seq === 'number' && s.seq !== 0 && s.seq !== lastSeq;
+    if (replay) lastSeq = s.seq;
     if (s.clip) {
       commandedClip = s.clip;
       // A local override owns the clip until it finishes.
-      if (!localClip) setClip(commandedClip, now);
+      if (!localClip) {
+        if (replay && clip === commandedClip) clipStart = now;
+        else setClip(commandedClip, now);
+      }
     }
     if (typeof s.walkDir === 'number') walkDir = s.walkDir;
     if (typeof s.walkSpeed === 'number') walkSpeed = s.walkSpeed;
+    const wasSleeping = sleeping;
     sleeping = s.state === 'sleeping';
-    if (sleeping && !particleList.some((p) => p.kind === 'zzz')) {
-      Particles.spawn(particleList, 'zzz', body.x, body.y - settings.scale * 10, 3);
-    }
+    // The first puff of z's goes up the moment he nods off; tick keeps them coming.
+    if (sleeping && !wasSleeping) lastZzzAt = 0;
     wake();
   });
 
@@ -982,11 +1109,14 @@
     wake();
   });
 
-  bridge.on('pip:reset', () => {
-    Physics.respawn(body, worldBounds());
+  bridge.on('pip:reset', (p) => {
+    // `x`, when given, is where to drop him in - under the pointer, after he
+    // was let go over a different display.
+    Physics.respawn(body, worldBounds(), p && typeof p.x === 'number' ? p.x : undefined);
     drag = null;
     body.held = false;
     gotoX = null;
+    turnedFrom = 0;
     stopClimb();
     lastDrawKey = '';
     wake();
@@ -1024,6 +1154,7 @@
 
   resizeCanvas();
   prerender();
+  watchPixelRatio();
   Physics.respawn(body, worldBounds());
   lastTick = performance.now();
   clipStart = lastTick;
@@ -1087,9 +1218,42 @@
       settings.flavor = 'cherry';
       prerender();
       currentFrame = Sprites.FRAME_NAMES[0];
+
+      // The checks below run in the real page on purpose. A top-level name
+      // clash between two of these scripts once turned every particle into an
+      // invisible speech bubble and switched off the walls - and every unit
+      // test passed, because require() gives each module its own scope.
+      for (const kind of Particles.KINDS) {
+        const list = Particles.update(Particles.spawn([], kind, 200, 200, 3), 0.1);
+        if (!list.length || !list.every((p) => p.kind === kind)) {
+          errors.push('particles: spawning ' + kind + ' did not build ' + kind + ' particles');
+          continue;
+        }
+        ctx.clearRect(0, 0, bounds.width, bounds.height);
+        Particles.draw(ctx, list, settings.scale);
+        const px = ctx.getImageData(Math.round(80 * dpr), Math.round(80 * dpr),
+          Math.round(240 * dpr), Math.round(240 * dpr)).data;
+        let painted = false;
+        for (let i = 3; i < px.length && !painted; i += 4) painted = px[i] > 0;
+        if (!painted) errors.push('particles: ' + kind + ' drew nothing');
+      }
+
+      const wb = worldBounds();
+      const probe = Physics.createBody(wb.right - 1, wb.bottom);
+      probe.grounded = true;
+      probe.vx = 3000;
+      const ev = Physics.step(probe, 0.05, wb, {});
+      if (ev.respawned || probe.x !== wb.right) {
+        errors.push('physics: Pip went through the wall (' + (ev.reason || 'x ' + probe.x) + ')');
+      }
+
       lastDrawKey = '';
       return errors;
     },
-    state: () => ({ clip: clip, frame: currentFrame, x: body.x, y: body.y, flavor: settings.flavor })
+    state: () => ({
+      clip: clip, frame: currentFrame, x: body.x, y: body.y, flavor: settings.flavor,
+      state: pipState, scale: settings.scale, grounded: body.grounded, dragging: !!drag,
+      particles: particleList.map((p) => p.kind)
+    })
   };
 })();

@@ -15,11 +15,11 @@
 const path = require('path');
 const {
   app, BrowserWindow, Tray, Menu, ipcMain, screen,
-  nativeImage, powerMonitor, Notification, shell
+  nativeImage, powerMonitor, Notification
 } = require('electron');
 
 const logger = require('./src/main/logger.js');
-const { createStorage } = require('./src/main/storage.js');
+const { createStorage, cleanPatch } = require('./src/main/storage.js');
 const brain = require('./src/main/brain.js');
 const pomodoro = require('./src/main/pomodoro.js');
 const reminders = require('./src/main/reminders.js');
@@ -37,7 +37,11 @@ const IS_SMOKE = process.argv.includes('--smoke');
 const IS_DEV = process.argv.includes('--dev') || (!app.isPackaged && !IS_SMOKE);
 const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
 
-/** Dev runs compress every duration by 60x so a 25 minute block takes 25s. */
+/**
+ * Dev runs compress every work timer by 60x so a 25 minute block takes 25s.
+ * Animation lengths are never scaled: a reaction squeezed to 30ms is one you
+ * cannot see, which made dev mode useless for watching Pip behave.
+ */
 const TIME_SCALE = IS_DEV ? 1 / 60 : 1;
 
 /**
@@ -95,16 +99,24 @@ function runApp(store) {
   const SCALE_BY_SIZE = { small: 3, medium: 4, large: 5 };
   const MINUTE = 60000;
 
-  /** Reaction lengths, before the dev time scale. */
-  const REACTION_MS = {
-    happy: 1800, heart: 2400, eat: 2000, surprise: 1500,
-    sulk: 3000, laugh: 2000, blush: 2000, dizzy: 2600
-  };
+  /**
+   * How long Pip stays dizzy after a rough landing. Longer than the clip on
+   * purpose: he is usually still in the air when the reaction starts.
+   */
+  const DIZZY_MS = 2600;
+  /** Let go faster than this (DIP/s), or from higher (DIP), and it was a throw. */
+  const ROUGH_SPEED = 700;
+  const ROUGH_HEIGHT = 240;
   const CELEBRATE_MS = 6000;
   /** Idle behaviours are picked on this cadence, scaled by activity level. */
   const BEHAVIOR_MIN_MS = 20000;
   const BEHAVIOR_MAX_MS = 90000;
-  const BEHAVIOR_LENGTH_MS = 4000;
+  /** How long Pip chases the pointer before giving up. */
+  const CHASE_MS = 4000;
+  /** Resume, unlock and the idle timer can all report one return; greet once. */
+  const WELCOME_GAP_MS = 60000;
+  /** Before saying hello, wait to see whether the lock screen comes straight up. */
+  const GREET_DELAY_MS = 1500;
 
   const rng = IS_SMOKE ? brain.seededRng(1234) : Math.random;
 
@@ -137,14 +149,21 @@ function runApp(store) {
     lastChaseSendAt: 0,
     cursorX: 0,
     pipX: 0,
-    onboardingStep: -1
+    onboardingStep: -1,
+    seq: 0,                  // bumped per reaction/behaviour so a repeat replays
+    wasQuiet: false,
+    lastPomodoroSentAt: 0,
+    lastWelcomeAt: 0
   };
 
   let cursorTimer = null;
+  let cursorScheduleTimer = null;
   let brainTimer = null;
   let idleTimer = null;
+  let wakeWatchTimer = null;
   let onboardingTimer = null;
   let singleClickTimer = null;
+  let greetTimer = null;
 
   /** The clock everything reads, so the debug panel can push it forward. */
   const now = () => Date.now() + world.clockOffset;
@@ -250,17 +269,32 @@ function runApp(store) {
    * ---------------------------------------------------------------- */
 
   /**
+   * Play a reaction for exactly as long as its clip runs.
+   *
+   * It used to run on a fixed table of lengths, nearly all of them longer than
+   * the clips - so a 0.8s happy wiggle was followed by a second of Pip frozen
+   * in the idle pose, waiting for the reaction to officially end.
+   *
    * @param {string} clip
-   * @param {number} [ms]      override the default length
-   * @param {object} [move]    {walkDir, walkSpeed} to react while moving
+   * @param {object} [opts] `ms` to hold it longer than the clip plays;
+   *   `walkDir` and `walkSpeed` to react while moving
    */
-  function react(clip, ms, move) {
+  function react(clip, opts) {
+    const o = opts || {};
+    world.seq += 1;
     world.reaction = {
       clip: clip,
-      until: now() + scaled(ms || REACTION_MS[clip] || 1800),
-      walkDir: move ? move.walkDir : 0,
-      walkSpeed: move ? move.walkSpeed : 0
+      until: now() + Math.max(Animations.clipDuration(clip), o.ms || 0),
+      walkDir: o.walkDir || 0,
+      walkSpeed: o.walkSpeed || 0,
+      seq: world.seq
     };
+  }
+
+  /** Start an idle behaviour, lasting exactly as long as its clip. */
+  function startBehavior(clip) {
+    world.seq += 1;
+    world.behavior = { clip: clip, until: now() + Animations.clipDuration(clip), seq: world.seq };
   }
 
   function bumpMood(event) {
@@ -284,7 +318,7 @@ function runApp(store) {
     const t = now();
     if (world.behavior && t < world.behavior.until) return;
     if (t < world.nextBehaviorAt) return;
-    if (t < store.get('quietUntil') || store.get('hidden')) return;
+    if (t < store.get('quietUntil') || store.get('hidden') || world.climbing) return;
 
     const activity = brain.ACTIVITY[store.get('activityLevel')] || brain.ACTIVITY.normal;
     // Dev mode makes idle behaviours much more frequent so they can be seen.
@@ -302,7 +336,7 @@ function runApp(store) {
     // 20-90s the interval says rather than some multiple of it.
     if (roll < 0.9) {
       const clip = pickBehavior();
-      world.behavior = { clip: clip, until: t + scaled(BEHAVIOR_LENGTH_MS) };
+      startBehavior(clip);
       if (clip === 'nap') particles('zzz', 3);
     } else {
       // A passing remark, coloured by how Pip is feeling. The chatter
@@ -338,7 +372,7 @@ function runApp(store) {
    * then gives up and goes back to pottering about.
    */
   function chaseCursor(t) {
-    world.chasingUntil = t + scaled(4000);
+    world.chasingUntil = t + CHASE_MS;
     world.lastChaseSendAt = 0;
     callPip();
     say('bored');
@@ -383,7 +417,9 @@ function runApp(store) {
       new Notification({
         title: title,
         body: body,
-        icon: path.join(__dirname, 'assets', 'icon-256.png'),
+        // A NativeImage rather than a path: in the packaged app the path points
+        // inside app.asar, which Windows' notification service cannot open.
+        icon: nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon-256.png')),
         silent: false
       }).show();
     } catch (err) {
@@ -395,30 +431,41 @@ function runApp(store) {
     const state = store.get('pomodoro');
     if (state.phase === 'off') return;
     const res = pomodoro.tick(state, now(), pomodoroCfg());
-    if (res.transitioned) {
-      store.set({ pomodoro: res.state });
-      if (res.finishedPhase === 'work') {
-        const today = store.get('today');
-        store.set({ today: Object.assign({}, today, { pomodoros: today.pomodoros + 1 }) });
-        world.celebrateUntil = now() + scaled(CELEBRATE_MS);
-        particles('confetti', 18);
-        say('pomodoro_done', true);
-        notify('Nice focus!', 'That is one Pomodoro done. Time for a break.');
-        bumpMood('pomodoro');
-        // Once the confetti has cleared, tell them what the break is for.
-        setTimeout(() => {
-          if (!quitting) say('break_start', true);
-        }, scaled(CELEBRATE_MS) + 600);
-      } else {
-        say('break_over', true);
-        notify('Break over', 'Back to it when you are ready.');
-      }
-      pushSettings();
+    if (!res.transitioned) {
+      // The ring moves a hair a second; ten messages a second bought nothing.
+      if (Date.now() - world.lastPomodoroSentAt >= 1000) sendPomodoro();
+      return;
     }
+
+    store.set({ pomodoro: res.state });
+    if (res.finishedPhase === 'work') {
+      const today = store.get('today');
+      store.set({ today: Object.assign({}, today, { pomodoros: today.pomodoros + 1 }) });
+      // Never celebrate for longer than half the break it announces: a dev
+      // mode break is only five seconds.
+      const celebrateMs = Math.min(CELEBRATE_MS,
+        pomodoro.phaseDuration(res.state.phase, pomodoroCfg()) / 2);
+      world.celebrateUntil = now() + celebrateMs;
+      particles('confetti', 18);
+      say('pomodoro_done', true);
+      notify('Nice focus!', 'That is one Pomodoro done. Time for a break.');
+      bumpMood('pomodoro');
+      // Once the confetti has cleared, tell them what the break is for -
+      // unless the Pomodoro was stopped in the meantime.
+      setTimeout(() => {
+        const phase = store.get('pomodoro').phase;
+        if (!quitting && (phase === 'break' || phase === 'longBreak')) say('break_start', true);
+      }, celebrateMs + 600);
+    } else {
+      say('break_over', true);
+      notify('Break over', 'Back to it when you are ready.');
+    }
+    pushSettings();
     sendPomodoro();
   }
 
   function sendPomodoro() {
+    world.lastPomodoroSentAt = Date.now();
     const state = store.get('pomodoro');
     const cfg = pomodoroCfg();
     const running = state.phase !== 'off';
@@ -507,11 +554,53 @@ function runApp(store) {
   }
 
   function onWakeUp() {
+    cancelGreeting();
     logger.info('you came back');
-    callPip();
+    const t = now();
+    // Resume, unlock and the idle timer can each report the same return.
+    if (t - world.lastWelcomeAt < WELCOME_GAP_MS) return;
+    world.lastWelcomeAt = t;
     react('happy');
     say('welcome_back', true);
     particles('sparkle', 5);
+    // A happy bounce, then trot over. Both at once and the trot hides it.
+    setTimeout(() => { if (!quitting) callPip(); }, Animations.clipDuration('happy'));
+  }
+
+  /**
+   * Greet a moment after the machine wakes, and only if nothing has put Pip
+   * back to sleep by then. Windows raises the lock screen straight after a
+   * resume, so greeting at once said hello to a locked screen - and then again
+   * on the unlock.
+   */
+  function greetSoon() {
+    cancelGreeting();
+    greetTimer = setTimeout(() => {
+      greetTimer = null;
+      if (!quitting && !world.asleep) onWakeUp();
+    }, GREET_DELAY_MS);
+  }
+
+  function cancelGreeting() {
+    if (greetTimer) clearTimeout(greetTimer);
+    greetTimer = null;
+  }
+
+  /**
+   * While Pip sleeps, look for you every second rather than every ten, so he
+   * is up as you sit down rather than a while after.
+   */
+  function startWakeWatch() {
+    wakeWatchTimer = setInterval(() => {
+      if (!world.asleep || world.systemAsleep || world.held) return;
+      let idleSeconds;
+      try {
+        idleSeconds = powerMonitor.getSystemIdleTime();
+      } catch (err) {
+        return;
+      }
+      if (idleSeconds < 5) pollIdle();
+    }, 1000);
   }
 
   /**
@@ -524,7 +613,7 @@ function runApp(store) {
     const key = reminders.localDateKey(t);
     if (store.get('lastGoodMorning') === key) return;
     store.set({ lastGoodMorning: key });
-    world.behavior = { clip: 'stretch', until: t + scaled(BEHAVIOR_LENGTH_MS) };
+    startBehavior('stretch');
     if (new Date(t).getHours() < 12) say('good_morning', true);
   }
 
@@ -586,14 +675,16 @@ function runApp(store) {
 
     overlay.webContents.on('render-process-gone', (_e, details) => {
       logger.error('renderer gone', details);
-      if (!quitting && overlay && !overlay.isDestroyed()) overlay.reload();
+      if (quitting || !overlay || overlay.isDestroyed()) return;
+      // If the renderer died while the cursor was on Pip, the window is solid
+      // across the whole work area. Hand the mouse back before anything else.
+      overlay.setIgnoreMouseEvents(true, { forward: true });
+      overlay.reload();
     });
 
-    // Never let a stray link navigate the overlay away from Pip.
-    overlay.webContents.setWindowOpenHandler(({ url }) => {
-      shell.openExternal(url).catch(() => {});
-      return { action: 'deny' };
-    });
+    // Signing out or shutting down never reaches quit() - on Windows Electron
+    // does not even emit before-quit for it. This is the last word we get.
+    overlay.on('session-end', () => persistStreak());
 
     overlay.on('closed', () => { overlay = null; });
   }
@@ -619,7 +710,9 @@ function runApp(store) {
     return {
       settings: store.all,
       today: todayPayload(),
-      pomodoroRunning: store.get('pomodoro').phase !== 'off'
+      pomodoroRunning: store.get('pomodoro').phase !== 'off',
+      quiet: now() < store.get('quietUntil'),
+      hidden: !!store.get('hidden')
     };
   }
 
@@ -799,10 +892,14 @@ function runApp(store) {
         break;
       case 'quiet': {
         const quiet = now() < store.get('quietUntil');
-        store.set({ quietUntil: quiet ? 0 : now() + scaled(60 * MINUTE) });
+        // Said before quiet mode starts: once it has, say() stays silent, which
+        // is why this line used to never appear at all.
         if (!quiet) say('quiet_on', true);
+        store.set({ quietUntil: quiet ? 0 : now() + scaled(60 * MINUTE) });
+        world.wasQuiet = !quiet;
         sendSettings();
         refreshMenu();
+        pushSettings();
         break;
       }
       case 'toggle-visible': {
@@ -813,6 +910,7 @@ function runApp(store) {
           else { overlay.showInactive(); overlay.setAlwaysOnTop(true, 'floating'); }
         }
         refreshMenu();
+        pushSettings();
         break;
       }
       case 'reset-position':
@@ -868,10 +966,12 @@ function runApp(store) {
 
   function quit() {
     quitting = true;
-    for (const t of [cursorTimer, brainTimer, idleTimer, onboardingTimer]) {
+    for (const t of [cursorTimer, cursorScheduleTimer, brainTimer, idleTimer,
+      wakeWatchTimer, onboardingTimer]) {
       if (t) clearInterval(t);
     }
     if (singleClickTimer) clearTimeout(singleClickTimer);
+    cancelGreeting();
     persistStreak();
     if (tray && !tray.isDestroyed()) tray.destroy();
     app.quit();
@@ -892,7 +992,7 @@ function runApp(store) {
       cursorTimer = setInterval(pollCursor, period);
     };
     schedule();
-    setInterval(schedule, 1000);
+    cursorScheduleTimer = setInterval(schedule, 1000);
   }
 
   function pollCursor() {
@@ -920,6 +1020,15 @@ function runApp(store) {
       const s = store.all;
 
       if (isNightcapHour() !== world.nightcap) sendSettings();
+      const quiet = t < s.quietUntil;
+      if (quiet !== world.wasQuiet) {
+        // Quiet mode runs out on its own, and the tray menu, the settings
+        // window and Pip all have to hear about it.
+        world.wasQuiet = quiet;
+        sendSettings();
+        refreshMenu();
+        pushSettings();
+      }
       announceFatigue(t, s);
       updateChase(t);
       if (world.reaction && t >= world.reaction.until) world.reaction = null;
@@ -955,14 +1064,24 @@ function runApp(store) {
       const state = world.forced.state || result.state;
       const clip = world.forced.clip || result.clip;
 
-      const key = [state, clip, result.walkDir, Math.round(result.walkSpeed)].join('|');
+      // Which reaction or behaviour this is. Without it, a second pet during
+      // the first changed nothing on the wire, so the renderer never replayed
+      // the clip and Pip just stood there for the extra time.
+      let seq = 0;
+      if (result.state === 'reaction' && world.reaction) seq = world.reaction.seq;
+      else if (result.state === 'idle' && world.behavior && result.clip === world.behavior.clip) {
+        seq = world.behavior.seq;
+      }
+
+      const key = [state, clip, result.walkDir, Math.round(result.walkSpeed), seq].join('|');
       if (key === world.lastState) return;
       world.lastState = key;
       send('pip:state', {
         state: state,
         clip: clip,
         walkDir: world.forced.clip ? 0 : result.walkDir,
-        walkSpeed: result.walkSpeed
+        walkSpeed: result.walkSpeed,
+        seq: seq
       });
       pushDebug();
     }, 100);
@@ -987,8 +1106,9 @@ function runApp(store) {
     if (world.onboardingDone || onboardingTimer) return;
     if (store.get('onboarded')) { world.onboardingDone = true; return; }
     world.onboardingStep = 0;
-    // Pip has just dropped in and landed; wave, then talk you through it.
-    world.behavior = { clip: 'wave', until: now() + scaled(3000) };
+    // Pip is still dropping in from the top. Once he has landed and bounced,
+    // wave, while the bubbles talk you through the basics.
+    setTimeout(() => { if (!quitting) startBehavior('wave'); }, 2000);
     const step = () => {
       if (world.onboardingStep >= ONBOARDING.length) {
         clearInterval(onboardingTimer);
@@ -1012,6 +1132,14 @@ function runApp(store) {
   function wireIPC() {
     ipcMain.on('pip:ready', () => {
       logger.info('renderer ready');
+      // A fresh renderer starts click-through, holding nothing and on the
+      // ground, and only reports changes from there - so main has to agree
+      // with it. After a reload following a crash, a stale "interactive" left
+      // the overlay solid over the whole desktop, swallowing every click.
+      if (overlay && !overlay.isDestroyed()) overlay.setIgnoreMouseEvents(true, { forward: true });
+      world.held = false;
+      world.climbing = false;
+      world.lastState = null;   // and it needs to be told the current state
       sendSettings();
       sendBounds();
       sendPomodoro();
@@ -1031,22 +1159,37 @@ function runApp(store) {
     });
 
     ipcMain.on('pip:dropped', (_e, payload) => {
-      if (payload && typeof payload.x === 'number') world.pipX = payload.x;
+      const p = payload || {};
+      if (typeof p.x === 'number') world.pipX = p.x;
       world.held = false;
-      react('dizzy');
-      particles('star', 4);
-      say('dizzy');
-      // Follow the cursor to whichever display Pip was let go over.
+      // Being set down gently is not the same as being thrown. Only a real
+      // toss, or a drop from a height, leaves him seeing stars - the renderer
+      // adds those itself when he actually hits the floor.
+      const rough = (Number(p.speed) || 0) > ROUGH_SPEED || (Number(p.height) || 0) > ROUGH_HEIGHT;
+      if (rough) {
+        react('dizzy', { ms: DIZZY_MS });
+        say('dizzy');
+      }
+      // Follow the cursor to whichever display Pip was let go over, and drop
+      // him in there under the pointer. Refitting alone left him at his old
+      // overlay coordinates, nowhere near where he was let go.
       try {
         const point = screen.getCursorScreenPoint();
         const display = screen.getDisplayNearestPoint(point);
-        if (display.id !== currentDisplayId) fitToDisplay(display);
+        if (display.id !== currentDisplayId) {
+          fitToDisplay(display);
+          send('pip:reset', { x: point.x - display.workArea.x });
+        }
       } catch (err) {
         logger.warn('could not resolve drop display', err);
       }
     });
 
     ipcMain.on('pip:click', (_e, payload) => {
+      // A click is a grab that never went anywhere. The renderer only reports
+      // a grab once Pip is actually lifted, but a stale `held` outranks every
+      // other state, so never let one survive a click.
+      world.held = false;
       // The click lands on Pip, so this is also the best fix we get on where
       // he currently is.
       if (payload && typeof payload.x === 'number') world.pipX = payload.x;
@@ -1069,10 +1212,7 @@ function runApp(store) {
         // Puff up and scoot away from the pointer. The movement has to ride on
         // the reaction itself - a stationary reaction outlasts any wander we
         // could set here and would swallow the scoot entirely.
-        const away = scootDirection();
-        // Run the huff for exactly as long as the sulk animation lasts, so he
-        // does not finish scooting in the idle pose.
-        react('sulk', Animations.clipDuration('sulk'), { walkDir: away, walkSpeed: brain.BASE_RUN });
+        react('sulk', { walkDir: scootDirection(), walkSpeed: brain.BASE_RUN });
         say('annoyed', true);
         particles('sweat', 3);
         return;
@@ -1122,7 +1262,7 @@ function runApp(store) {
       if (!low) { world.batteryWarnedAt = 0; return; }
       if (now() - world.batteryWarnedAt < scaled(30 * MINUTE)) return;
       world.batteryWarnedAt = now();
-      react('sulk', 3000);
+      react('sulk');
       say('battery_low', true);
     });
 
@@ -1139,7 +1279,11 @@ function runApp(store) {
     ipcMain.handle('settings:get', () => settingsPayload());
 
     ipcMain.on('settings:set', (_e, payload) => {
-      const patch = (payload && payload.patch) || {};
+      // Only the settings the window offers, and only sane values of them.
+      // store.set would otherwise accept any known key - mood, the Pomodoro,
+      // today's tallies - with anything at all in it.
+      const patch = cleanPatch(payload && payload.patch);
+      if (!Object.keys(patch).length) return;
       store.set(patch);
       if ('launchAtLogin' in patch) applyLoginItem();
       sendSettings();
@@ -1182,20 +1326,21 @@ function runApp(store) {
     screen.on('display-removed', refit);
 
     const sleep = (why) => {
+      cancelGreeting();
       world.systemAsleep = true;
       world.asleep = true;
       world.reminders = reminders.onBreakEvent(world.reminders, now());
       persistStreak();
       logger.info(why);
     };
-    // Windows fires resume AND unlock-screen for one wake, so only the first
-    // of the pair actually greets you.
+    // Windows fires resume AND unlock-screen for one wake, often with a
+    // lock-screen in between. greetSoon waits out that shuffle.
     const wake = (why) => {
       const wasAsleep = world.asleep;
       world.systemAsleep = false;
       world.asleep = false;
       logger.info(why);
-      if (wasAsleep) onWakeUp();
+      if (wasAsleep) greetSoon();
     };
 
     powerMonitor.on('suspend', () => sleep('system suspend'));
@@ -1205,7 +1350,8 @@ function runApp(store) {
 
     powerMonitor.on('on-battery', () => {
       logger.info('on battery');
-      react('sulk', 3000);
+      // The lines are all "adventure mode!", so no sulking about it.
+      react('surprise');
       say('on_battery', true);
     });
     powerMonitor.on('on-ac', () => {
@@ -1283,13 +1429,23 @@ function runApp(store) {
       overlay.showInactive();
       overlay.setAlwaysOnTop(true, 'floating');
     }
-    world.behavior = { clip: 'wave', until: now() + scaled(2500) };
-    callPip();
+    // Wave first, then come over: a trot that starts at once replaces the
+    // wave before a single frame of it is seen.
+    startBehavior('wave');
+    setTimeout(() => { if (!quitting) callPip(); }, Animations.clipDuration('wave'));
   });
 
   // Closing a window must never quit Pip; only the Quit item does.
   app.on('window-all-closed', () => { /* deliberately empty */ });
   app.on('before-quit', () => { quitting = true; });
+
+  // No window of Pip's ever navigates or opens another. Dropping a file on
+  // Pip would otherwise load that file in his place - in a transparent,
+  // always-on-top window the size of the screen.
+  app.on('web-contents-created', (_e, contents) => {
+    contents.on('will-navigate', (e) => e.preventDefault());
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  });
 
   process.on('uncaughtException', (err) => {
     logger.error('uncaught exception', err);
@@ -1314,6 +1470,7 @@ function runApp(store) {
     startCursorPolling();
     startBrain();
     startIdlePolling();
+    startWakeWatch();
 
     if (IS_SMOKE) {
       setTimeout(() => {

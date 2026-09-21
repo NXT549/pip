@@ -188,11 +188,15 @@
     document.getElementById('statStreak').textContent = formatStreak(today.longestStreakMs);
     document.getElementById('statMood').textContent = moodWord(today.mood);
 
-    const btn = document.getElementById('btnPomodoro');
-    if (btn) {
-      const running = payload.pomodoroRunning;
-      btn.textContent = running ? 'Stop Pomodoro' : 'Start Pomodoro';
-    }
+    // The buttons toggle, so they say what they will do next.
+    label('btnPomodoro', payload.pomodoroRunning ? 'Stop Pomodoro' : 'Start Pomodoro');
+    label('btnQuiet', payload.quiet ? 'End quiet mode' : 'Quiet for 1 hour');
+    label('btnVisible', payload.hidden ? 'Show Pip' : 'Hide Pip');
+  }
+
+  function label(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
   }
 
   /* ---------------------------------------------------------------- *

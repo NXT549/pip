@@ -15,6 +15,8 @@
 const fs = require('fs');
 const path = require('path');
 
+const Palettes = require('../renderer/palettes.js');
+
 /** Everything Pip remembers, and what it falls back to. */
 const DEFAULTS = {
   version: 1,
@@ -62,6 +64,71 @@ const DEFAULTS = {
     longestStreakMs: 0
   }
 };
+
+/**
+ * What each user-editable setting may hold. The settings window enforces the
+ * same ranges (a test checks the two agree), but the file can be edited by
+ * hand, and a value of the right type can still be nonsense: a negative
+ * drowsiness threshold left Pip permanently drowsy.
+ */
+const NUMBER_LIMITS = {
+  pomodoroWork: [1, 180],
+  pomodoroBreak: [1, 60],
+  pomodoroLongBreak: [1, 120],
+  pomodoroLongEvery: [1, 12],
+  drowsyAfter: [5, 600],
+  exhaustedAfter: [5, 600],
+  waterInterval: [5, 600]
+};
+
+const CHOICES = {
+  flavor: Palettes.FLAVOR_NAMES,
+  petSize: ['small', 'medium', 'large'],
+  activityLevel: ['calm', 'normal', 'hyper']
+};
+
+const TOGGLES = ['notifications', 'launchAtLogin', 'compatibilityMode'];
+
+/** The keys the settings window may change. Everything else is main's own state. */
+const USER_KEYS = Object.keys(CHOICES).concat(Object.keys(NUMBER_LIMITS), TOGGLES);
+
+/** One user setting made safe, or undefined when there is nothing usable in it. */
+function cleanValue(key, value) {
+  if (key in NUMBER_LIMITS) {
+    if (typeof value !== 'number' || !isFinite(value)) return undefined;
+    const lo = NUMBER_LIMITS[key][0];
+    const hi = NUMBER_LIMITS[key][1];
+    return Math.min(hi, Math.max(lo, Math.round(value)));
+  }
+  if (key in CHOICES) return CHOICES[key].indexOf(value) !== -1 ? value : undefined;
+  if (TOGGLES.indexOf(key) !== -1) return typeof value === 'boolean' ? value : undefined;
+  return undefined;
+}
+
+/**
+ * Filter a patch from the settings window down to the keys it may change,
+ * with every value made sane. Anything unusable is dropped, not defaulted -
+ * a bad field must not reset a good setting.
+ */
+function cleanPatch(patch) {
+  const out = {};
+  if (!patch || typeof patch !== 'object') return out;
+  for (const key of USER_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+    const value = cleanValue(key, patch[key]);
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+/** Repair loaded settings in place: anything unusable goes back to its default. */
+function sanitize(data) {
+  for (const key of USER_KEYS) {
+    const value = cleanValue(key, data[key]);
+    data[key] = value === undefined ? clone(DEFAULTS[key]) : value;
+  }
+  return data;
+}
 
 /** Deep-merge `saved` over `defaults`, keeping only keys defaults knows about. */
 function mergeDefaults(defaults, saved) {
@@ -117,7 +184,7 @@ function createStorage(dir, log) {
       // A UTF-8 byte-order mark is not corruption. Notepad and PowerShell 5.1
       // both write one, and JSON.parse rejects it - so without this, hand-
       // editing the file on Windows silently reset every setting and stat.
-      data = mergeDefaults(DEFAULTS, JSON.parse(raw.replace(/^\uFEFF/, '')));
+      data = sanitize(mergeDefaults(DEFAULTS, JSON.parse(raw.replace(/^\uFEFF/, ''))));
     } catch (err) {
       // Corrupt. Keep a copy so nothing is silently destroyed, then reset.
       const backup = file + '.corrupt-' + Date.now() + '.bak';
@@ -168,4 +235,13 @@ function createStorage(dir, log) {
   };
 }
 
-module.exports = { DEFAULTS, mergeDefaults, createStorage };
+module.exports = {
+  DEFAULTS,
+  NUMBER_LIMITS,
+  CHOICES,
+  USER_KEYS,
+  mergeDefaults,
+  cleanPatch,
+  sanitize,
+  createStorage
+};

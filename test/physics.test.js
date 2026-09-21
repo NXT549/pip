@@ -334,3 +334,31 @@ test('a respawn says why the position was invalid', () => {
   assert.match(ev.reason, /on entry: x 1400 right of 1216/);
   assert.ok(Physics.isValidPosition(body, bounds), 'and he is somewhere valid afterwards');
 });
+
+/* ------------------------------------------------------------------ *
+ * Walls are Pip's to deal with, and respawns can aim
+ * ------------------------------------------------------------------ */
+
+test('resolveWalk says which wall stopped him, and only when one did', () => {
+  const bounds = { left: 64, right: 1856 };
+  assert.strictEqual(Physics.resolveWalk({ x: 64 }, -1, null, bounds, 16).blocked, 'left');
+  assert.strictEqual(Physics.resolveWalk({ x: 1856 }, 1, null, bounds, 16).blocked, 'right');
+  assert.strictEqual(Physics.resolveWalk({ x: 64 }, 1, null, bounds, 16).blocked, null);
+  assert.strictEqual(Physics.resolveWalk({ x: 900 }, -1, null, bounds, 16).blocked, null);
+  assert.strictEqual(Physics.resolveWalk({ x: 900 }, 0, null, bounds, 16).blocked, null);
+});
+
+test('respawn drops Pip in at a chosen x, kept inside the walls', () => {
+  const bounds = world();
+  const body = Physics.createBody(0, 0);
+
+  Physics.respawn(body, bounds, 300);
+  assert.strictEqual(body.x, 300);
+  assert.ok(body.y < bounds.top, 'he still drops in from above');
+
+  Physics.respawn(body, bounds, 5000);
+  assert.strictEqual(body.x, bounds.right);
+
+  Physics.respawn(body, bounds);
+  assert.strictEqual(body.x, (bounds.left + bounds.right) / 2, 'no x means the middle');
+});
