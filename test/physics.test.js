@@ -317,3 +317,20 @@ test('a real drop still lands, and the bounces land too', () => {
   }
   assert.strictEqual(body.grounded, true, 'and he comes to rest');
 });
+
+test('a respawn says why the position was invalid', () => {
+  // A respawn is invisible to every other test, and a bare "position was
+  // invalid" in the log gives nothing to act on - so step reports the cause.
+  const bounds = { left: 64, right: 1216, top: 64, bottom: 672, height: 128 };
+
+  assert.strictEqual(Physics.invalidReason({ x: 600, y: 672, vx: 0, vy: 0 }, bounds), null);
+  assert.match(Physics.invalidReason({ x: 600, y: 672, vx: NaN, vy: 0 }, bounds), /vx is NaN/);
+  assert.match(Physics.invalidReason({ x: 1400, y: 672, vx: 0, vy: 0 }, bounds), /right of 1216/);
+
+  // ...and the reason comes out of step itself, not just the helper.
+  const body = Physics.createBody(1400, 672);
+  const ev = Physics.step(body, 1 / 30, bounds, {});
+  assert.strictEqual(ev.respawned, true);
+  assert.match(ev.reason, /on entry: x 1400 right of 1216/);
+  assert.ok(Physics.isValidPosition(body, bounds), 'and he is somewhere valid afterwards');
+});

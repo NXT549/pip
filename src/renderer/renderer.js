@@ -549,7 +549,19 @@
       opts.walkSpeed = dir * (gotoX !== null ? Math.max(walkSpeed, 80) : walkSpeed);
     }
     const events = Physics.step(body, dt, wb, opts);
-    if (events.respawned) notify('pip:error', { message: 'position was invalid, respawned' });
+    if (events.respawned) {
+      // Name the cause and the context. The bare "position was invalid" has
+      // shown up in real logs with nothing to act on.
+      notify('pip:error', {
+        message: 'position was invalid (' + events.reason + '), respawned',
+        stack: JSON.stringify({
+          wb: [Math.round(wb.left), Math.round(wb.right), Math.round(wb.top), Math.round(wb.bottom)],
+          bounds: [Math.round(bounds.width), Math.round(bounds.height)],
+          scale: settings.scale, dpr: dpr, drag: !!drag, climbing: body.climbing,
+          walkDir: walkDir, walkSpeed: walkSpeed, dt: Math.round(dt * 1000)
+        })
+      });
+    }
     // physics.js can end a climb by itself (reaching the floor), so re-sync
     // rather than leaving main convinced Pip is still on the wall.
     if (!body.climbing && lastClimbSent) sendClimb(false);

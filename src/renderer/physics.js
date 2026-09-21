@@ -42,17 +42,31 @@ function createBody(x, y) {
   };
 }
 
-/** Is this a position Pip could actually be at? */
-function isValidPosition(body, bounds) {
-  if (!body) return false;
-  const nums = [body.x, body.y, body.vx, body.vy];
-  for (const n of nums) {
-    if (typeof n !== 'number' || !isFinite(n)) return false;
+/**
+ * Why this position is impossible, or null if it is fine.
+ *
+ * Kept separate from isValidPosition so a respawn can say what went wrong -
+ * "position was invalid" alone has turned up in real logs with nothing to go
+ * on, and a respawn is invisible to every test.
+ */
+function invalidReason(body, bounds) {
+  if (!body) return 'no body';
+  const fields = { x: body.x, y: body.y, vx: body.vx, vy: body.vy };
+  for (const k of Object.keys(fields)) {
+    const n = fields[k];
+    if (typeof n !== 'number' || !isFinite(n)) return k + ' is ' + n;
   }
   const slack = 64;
-  if (body.x < bounds.left - slack || body.x > bounds.right + slack) return false;
-  if (body.y < bounds.top - bounds.height - slack || body.y > bounds.bottom + slack) return false;
-  return true;
+  if (body.x < bounds.left - slack) return 'x ' + Math.round(body.x) + ' left of ' + Math.round(bounds.left);
+  if (body.x > bounds.right + slack) return 'x ' + Math.round(body.x) + ' right of ' + Math.round(bounds.right);
+  if (body.y < bounds.top - bounds.height - slack) return 'y ' + Math.round(body.y) + ' above the ceiling';
+  if (body.y > bounds.bottom + slack) return 'y ' + Math.round(body.y) + ' below floor ' + Math.round(bounds.bottom);
+  return null;
+}
+
+/** Is this a position Pip could actually be at? */
+function isValidPosition(body, bounds) {
+  return invalidReason(body, bounds) === null;
 }
 
 /**
@@ -93,9 +107,11 @@ function step(body, dt, bounds, opts) {
   opts = opts || {};
   const events = {};
 
-  if (!isValidPosition(body, bounds)) {
+  const before = invalidReason(body, bounds);
+  if (before) {
     respawn(body, bounds);
     events.respawned = true;
+    events.reason = 'on entry: ' + before;
     return events;
   }
 
@@ -173,9 +189,11 @@ function step(body, dt, bounds, opts) {
 
   clamp(body, bounds);
 
-  if (!isValidPosition(body, bounds)) {
+  const after = invalidReason(body, bounds);
+  if (after) {
     respawn(body, bounds);
     events.respawned = true;
+    events.reason = 'after the step: ' + after;
   }
 
   return events;
@@ -259,7 +277,7 @@ function resolveWalk(body, walkDir, gotoX, bounds, arriveWithin) {
 const Physics = {
   GRAVITY, MAX_FALL, BOUNCE, MIN_BOUNCE, FRICTION, MAX_THROW,
   SQUASH_MIN, SQUASH_MAX,
-  createBody, isValidPosition, respawn, clamp, step, throwVelocity, resolveWalk
+  createBody, isValidPosition, invalidReason, respawn, clamp, step, throwVelocity, resolveWalk
 };
 
 if (typeof window !== 'undefined') {
