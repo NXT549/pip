@@ -180,3 +180,20 @@ test('save writes no leftover temp file', (t) => {
 
   assert.deepStrictEqual(fs.readdirSync(dir), ['pip-data.json']);
 });
+
+test('a file saved with a UTF-8 byte-order mark is read, not treated as corrupt', (t) => {
+  // Notepad and PowerShell 5.1 both prepend U+FEFF when saving as UTF-8.
+  // JSON.parse rejects it, which used to make Pip back the file up and reset
+  // every setting and stat - over one invisible byte.
+  const dir = tempDir(t);
+  const file = path.join(dir, 'pip-data.json');
+  fs.writeFileSync(file, '\uFEFF' + JSON.stringify({ flavor: 'grape', mood: 81 }), 'utf8');
+
+  const log = fakeLog();
+  const data = createStorage(dir, log).load();
+
+  assert.strictEqual(data.flavor, 'grape', 'the saved flavour was thrown away');
+  assert.strictEqual(data.mood, 81);
+  const backups = fs.readdirSync(dir).filter((f) => f.includes('corrupt'));
+  assert.deepStrictEqual(backups, [], 'a BOM should not trigger the corrupt-file path');
+});

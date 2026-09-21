@@ -114,7 +114,10 @@ function createStorage(dir, log) {
       return data;
     }
     try {
-      data = mergeDefaults(DEFAULTS, JSON.parse(raw));
+      // A UTF-8 byte-order mark is not corruption. Notepad and PowerShell 5.1
+      // both write one, and JSON.parse rejects it - so without this, hand-
+      // editing the file on Windows silently reset every setting and stat.
+      data = mergeDefaults(DEFAULTS, JSON.parse(raw.replace(/^\uFEFF/, '')));
     } catch (err) {
       // Corrupt. Keep a copy so nothing is silently destroyed, then reset.
       const backup = file + '.corrupt-' + Date.now() + '.bak';
