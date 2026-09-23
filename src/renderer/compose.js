@@ -433,7 +433,7 @@
   }
 
   const Compose = {
-    EYES, EYE_W, EYE_MIRROR, LIVE_EYES, BLINK_STYLE, BODY_TONES,
+    EYES, EYE_W, EYE_MIRROR, LIVE_EYES, BLINK_STYLE, BODY_TONES, PAINTABLE,
     eyeRows, stampEye, redrawEyes, applyPattern, stampTrait, rotateSprite,
     bodyCoords, compose, composeRows, toRGBA, bbox, toGrid, toRows
   };

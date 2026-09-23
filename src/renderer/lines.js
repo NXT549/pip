@@ -416,6 +416,51 @@ const LINES = {
     'Whoa, busy busy.',
     'Which one are we doing now?',
     'Tab tab tab tab!'
+  ],
+
+  coins_earned: [
+    'Found some coins in my pocket!',
+    'Ooh, shiny. For the arcade!',
+    'Coins! We are practically rich.',
+    'Jingle jingle.',
+    'Saving up for something special.',
+    'Clink! Another handful.'
+  ],
+
+  gacha_new: [
+    'A new friend! Hello, hello!',
+    'Ooh, who is THAT?',
+    'We have a new bean in the family!',
+    'Look who just rolled out!',
+    'Another one for the collection!',
+    'Welcome, new Pip!'
+  ],
+
+  slot_jackpot: [
+    'JACKPOT! Did you see that?!',
+    'The lights! The coins! The glory!',
+    'We are on a roll!',
+    'Big win! I am dancing about it.',
+    'Ding ding ding!',
+    'That was amazing!'
+  ],
+
+  game_highscore: [
+    'New high score! You are a legend.',
+    'Best one yet!',
+    'I am telling everyone about that score.',
+    'Record smashed!',
+    'Top of the leaderboard! Our leaderboard.',
+    'Personal best! High five!'
+  ],
+
+  daily_bonus: [
+    'Here, a little something for coming back.',
+    'Daily coins! Fresh from the jar.',
+    'Another day, another handful of coins.',
+    'Good to see you. Have some coins!',
+    'Your daily treat, delivered.',
+    'Every day together is worth something.'
   ]
 };
 

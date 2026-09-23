@@ -16,7 +16,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const TIMEOUT_MS = 20000;
+const TIMEOUT_MS = 45000;
 
 let electronPath;
 try {

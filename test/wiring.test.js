@@ -120,7 +120,8 @@ test('the renderer sends every outbound channel and main handles it', () => {
 
 test('the settings and debug surfaces are handled in main', () => {
   for (const channel of ['settings:get', 'settings:set', 'settings:action', 'settings:update',
-    'debug:state', 'debug:force']) {
+    'debug:state', 'debug:force', 'arcade:get', 'arcade:pull', 'arcade:spin', 'arcade:game-end',
+    'arcade:equip', 'arcade:update']) {
     assert.ok(mainSrc.includes(channel), channel + ' is never handled in main.js');
   }
 });
@@ -129,7 +130,7 @@ test('every shared menu action has a handler', () => {
   // The tray menu, Pip's right-click menu and the settings window all funnel
   // through doAction, so a typo here is a silently dead menu item.
   const actions = ['pomodoro-toggle', 'water', 'feed', 'call', 'quiet',
-    'toggle-visible', 'reset-position', 'settings', 'debug', 'quit'];
+    'toggle-visible', 'reset-position', 'settings', 'debug', 'quit', 'arcade'];
   for (const action of actions) {
     assert.ok(mainSrc.includes("case '" + action + "'"),
       'doAction has no case for ' + action);
@@ -151,6 +152,26 @@ test('the overlay loads every renderer module it uses', () => {
   }
 });
 
+test('the arcade loads every module it uses, in an order that works', () => {
+  const html = read('arcade/arcade.html');
+  const order = ['palettes.js', 'traits.js', 'pips.js', 'sprites.js', 'compose.js', 'animations.js',
+    'particles.js', 'effects.js', 'pixelfont.js', 'art.js', 'pipdraw.js', 'gacha.js', 'slots.js',
+    'games/engine.js', 'games/catch.js', 'games/hop.js', 'games/match.js', 'arcade.js'];
+  let at = -1;
+  for (const file of order) {
+    const i = html.indexOf(file + '"');
+    assert.ok(i !== -1, 'arcade.html does not load ' + file);
+    assert.ok(i > at, file + ' is loaded out of order');
+    at = i;
+  }
+  // every channel the arcade bridge uses is handled in main
+  for (const channel of ['arcade:get', 'arcade:pull', 'arcade:spin', 'arcade:game-end']) {
+    assert.ok(mainSrc.includes("ipcMain.handle('" + channel + "'"), channel + ' has no handler');
+  }
+  assert.ok(mainSrc.includes("ipcMain.on('arcade:equip'"), 'arcade:equip has no handler');
+  assert.ok(preloadSrc.includes("'arcade:update'"), 'the arcade never hears about updates');
+});
+
 test('no module is left with a TODO or a stub', () => {
   const files = [
     'main.js', 'preload.js',
@@ -159,6 +180,10 @@ test('no module is left with a TODO or a stub', () => {
     'src/renderer/renderer.js', 'src/renderer/physics.js', 'src/renderer/particles.js',
     'src/renderer/bubbles.js', 'src/renderer/lines.js', 'src/renderer/animations.js',
     'src/renderer/palettes.js', 'src/renderer/compose.js', 'src/renderer/pips.js', 'src/renderer/traits.js',
+    'src/renderer/effects.js', 'src/renderer/pixelfont.js', 'src/main/economy.js', 'src/main/rhythm.js',
+    'src/main/apps.js', 'src/main/fgwatch.js',
+    'arcade/arcade.js', 'arcade/art.js', 'arcade/pipdraw.js', 'arcade/gacha.js', 'arcade/slots.js',
+    'arcade/games/engine.js', 'arcade/games/catch.js', 'arcade/games/hop.js', 'arcade/games/match.js',
     'settings/settings.js', 'debug/debug.js'
   ];
   for (const file of files) {

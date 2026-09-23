@@ -45,6 +45,10 @@ const DEFAULTS = {
   exhaustedAfter: 90,
   waterInterval: 45,
 
+  // coins, the collection, the gacha pity, high scores - see economy.js.
+  // null until first run, when main fills it in with a fresh economy.
+  economy: null,
+
   // persisted runtime state
   onboarded: false,
   hidden: false,

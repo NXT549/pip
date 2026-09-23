@@ -29,6 +29,9 @@
     'appAware', 'appTitles', 'hideFullscreen', 'quietMeetings'];
 
   let current = null;
+  /** The Pips you own, from main; the picker is rebuilt when it grows. */
+  let ownedIds = null;
+  let builtFor = '';
 
   /* ---------------------------------------------------------------- *
    * Flavour previews
@@ -83,7 +86,10 @@
     const host = document.getElementById('flavors');
     if (!host || !Palettes || !Pips) return;
     host.textContent = '';
-    for (const name of Pips.STARTERS) {
+    // every Pip you have collected, in catalogue order
+    const owned = ownedIds || Pips.STARTERS;
+    builtFor = owned.join(',');
+    for (const name of Pips.IDS.filter((id) => owned.indexOf(id) !== -1)) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'flavor';
@@ -172,6 +178,13 @@
     const s = payload.settings;
     const today = payload.today || {};
     current = s;
+    if (Array.isArray(payload.owned)) {
+      ownedIds = payload.owned;
+      if (ownedIds.join(',') !== builtFor) buildFlavors();
+      const n = Pips ? Pips.TYPES.length : 50;
+      document.getElementById('collected').textContent =
+        ownedIds.length + ' of ' + n + ' Pips collected - find more in the Arcade.';
+    }
 
     for (const key of NUMBER_FIELDS) {
       const el = document.getElementById(key);

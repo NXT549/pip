@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;">
+<title>Pip's Arcade</title>
+<link rel="stylesheet" href="arcade.css">
+</head>
+<body>
+
+<header class="top">
+  <canvas id="title" width="220" height="24" aria-label="Pip's Arcade"></canvas>
+  <div class="purse" aria-live="polite">
+    <canvas id="coins" width="120" height="24" aria-label="coins"></canvas>
+    <canvas id="tickets" width="70" height="24" aria-label="tickets"></canvas>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button type="button" role="tab" data-tab="play">Play</button>
+  <button type="button" role="tab" data-tab="gacha">Pip-a-Pon</button>
+  <button type="button" role="tab" data-tab="slots">Slots</button>
+  <button type="button" role="tab" data-tab="pipdex">Pipdex</button>
+  <button type="button" role="tab" data-tab="earn">How to earn</button>
+</nav>
+
+<main>
+
+  <!-- ---- minigames ---- -->
+  <section class="tab" id="tab-play" hidden>
+    <div class="game-pick" id="gamePick">
+      <button type="button" class="game-card" data-game="catch">
+        <span class="game-name">Bean Catch</span>
+        <span class="game-blurb">Catch the falling beans. Golden ones are worth five; rotten ones cost a life.</span>
+        <span class="game-best" data-best="catch"></span>
+      </button>
+      <button type="button" class="game-card" data-game="hop">
+        <span class="game-name">Pip Hop</span>
+        <span class="game-blurb">Trot across the desk. Jump the mugs and staplers, grab the coins.</span>
+        <span class="game-best" data-best="hop"></span>
+      </button>
+      <button type="button" class="game-card" data-game="match">
+        <span class="game-name">Pip Match</span>
+        <span class="game-blurb">Find the pairs. Every card is a Pip - the ones you have not met yet are shadows.</span>
+        <span class="game-best" data-best="match"></span>
+      </button>
+    </div>
+    <div class="stage-wrap" id="gameWrap" hidden>
+      <canvas id="game" class="stage" width="320" height="200"></canvas>
+      <div class="row-buttons">
+        <button type="button" id="gameBack">Back to the games</button>
+        <span class="hint" id="gameHint"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- gacha machine ---- -->
+  <section class="tab" id="tab-gacha" hidden>
+    <div class="stage-wrap">
+      <canvas id="gacha" class="stage" width="320" height="220"></canvas>
+    </div>
+    <div class="row-buttons">
+      <button type="button" class="big" id="pull1">Pull x1</button>
+      <button type="button" class="big" id="pull10">Pull x10</button>
+      <button type="button" id="gachaSkip" hidden>Skip</button>
+    </div>
+    <p class="note" id="gachaNote"></p>
+    <div class="results" id="gachaResults"></div>
+    <details class="odds">
+      <summary>The odds</summary>
+      <div id="gachaOdds"></div>
+    </details>
+  </section>
+
+  <!-- ---- slot machine ---- -->
+  <section class="tab" id="tab-slots" hidden>
+    <div class="stage-wrap">
+      <canvas id="slots" class="stage" width="320" height="220"></canvas>
+    </div>
+    <div class="row-buttons">
+      <span class="label">Bet</span>
+      <div class="bets" id="bets"></div>
+      <button type="button" class="big" id="spin">Spin</button>
+    </div>
+    <details class="odds">
+      <summary>What pays</summary>
+      <div id="paytable"></div>
+    </details>
+  </section>
+
+  <!-- ---- the collection ---- -->
+  <section class="tab" id="tab-pipdex" hidden>
+    <div class="dex-head">
+      <div class="dex-count" id="dexCount"></div>
+      <div class="meter"><div class="meter-fill" id="dexMeter"></div></div>
+      <div class="filters" id="dexFilters"></div>
+    </div>
+    <div class="dex" id="dex"></div>
+    <div class="modal" id="detail" hidden>
+      <div class="modal-card">
+        <canvas id="detailStage" class="stage" width="160" height="148"></canvas>
+        <div class="detail-text">
+          <h2 id="detailName"></h2>
+          <p class="detail-meta" id="detailMeta"></p>
+          <p id="detailBlurb"></p>
+          <div class="row-buttons">
+            <button type="button" class="big" id="detailEquip">Wear this Pip</button>
+            <button type="button" id="detailClose">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- how to earn ---- -->
+  <section class="tab" id="tab-earn" hidden>
+    <div id="earn"></div>
+    <p class="note">Coins are only ever earned: by having Pip about while you work, by looking after yourself, and by playing. They can't be bought, and there's no real money anywhere in Pip.</p>
+  </section>
+
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="../src/renderer/palettes.js"></script>
+<script src="../src/renderer/traits.js"></script>
+<script src="../src/renderer/pips.js"></script>
+<script src="../src/renderer/sprites.js"></script>
+<script src="../src/renderer/compose.js"></script>
+<script src="../src/renderer/animations.js"></script>
+<script src="../src/renderer/particles.js"></script>
+<script src="../src/renderer/effects.js"></script>
+<script src="../src/renderer/pixelfont.js"></script>
+<script src="art.js"></script>
+<script src="pipdraw.js"></script>
+<script src="gacha.js"></script>
+<script src="slots.js"></script>
+<script src="games/engine.js"></script>
+<script src="games/catch.js"></script>
+<script src="games/hop.js"></script>
+<script src="games/match.js"></script>
+<script src="arcade.js"></script>
+</body>
+</html>

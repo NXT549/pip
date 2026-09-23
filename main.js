@@ -32,6 +32,7 @@ const Pips = require('./src/renderer/pips.js');
 const rhythm = require('./src/main/rhythm.js');
 const apps = require('./src/main/apps.js');
 const fgwatch = require('./src/main/fgwatch.js');
+const economy = require('./src/main/economy.js');
 
 /* ------------------------------------------------------------------ *
  * Flags and paths
@@ -98,6 +99,7 @@ function runApp(store) {
   /** @type {BrowserWindow|null} */ let overlay = null;
   /** @type {BrowserWindow|null} */ let settingsWin = null;
   /** @type {BrowserWindow|null} */ let debugWin = null;
+  /** @type {BrowserWindow|null} */ let arcadeWin = null;
   /** @type {Tray|null} */ let tray = null;
 
   let currentDisplayId = null;
@@ -182,6 +184,24 @@ function runApp(store) {
   };
 
   let appWatcher = null;
+
+  /**
+   * The coins and the collection. Main is the only place they change: the
+   * arcade window asks, economy.js works it out, and the result is saved
+   * before anything is animated.
+   */
+  let econ = economy.normalize(store.get('economy'), Pips.STARTERS);
+  if (!econ.owned.some((o) => o.id === store.get('flavor'))) store.set({ flavor: 'cherry' });
+  store.set({ economy: econ });
+  let lastActivePoll = 0;
+
+  /** Settings the settings window may change. Coins, stats and timers are not among them. */
+  const USER_SETTINGS = [
+    'flavor', 'petSize', 'activityLevel', 'effects', 'notifications', 'launchAtLogin',
+    'compatibilityMode', 'appAware', 'appTitles', 'hideFullscreen', 'quietMeetings',
+    'pomodoroWork', 'pomodoroBreak', 'pomodoroLongBreak', 'pomodoroLongEvery',
+    'drowsyAfter', 'exhaustedAfter', 'waterInterval'
+  ];
 
   let cursorTimer = null;
   let brainTimer = null;
@@ -290,6 +310,92 @@ function runApp(store) {
 
   function particles(kind, count) {
     send('pip:particles', { kind: kind, count: count });
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Coins
+   * ---------------------------------------------------------------- */
+
+  function dayKey(t) {
+    return reminders.localDateKey(t === undefined ? now() : t);
+  }
+
+  function saveEcon(next) {
+    econ = next;
+    store.set({ economy: econ });
+    pushArcade();
+    pushSettings();
+  }
+
+  /** Coins pop out of Pip when he earns you some. */
+  function coinPop(paid) {
+    if (paid <= 0) return;
+    particles('coin', Math.min(6, Math.max(1, Math.ceil(paid / 10))));
+  }
+
+  /** A kept habit pays out. */
+  function earnHabit(kind) {
+    const res = economy.habit(econ, kind, dayKey());
+    if (res.paid) { saveEcon(res.state); coinPop(res.paid); }
+  }
+
+  /**
+   * Active time with Pip about pays a coin a minute, in handfuls. Called from
+   * the idle poll, so "active" means the same thing it does everywhere else.
+   */
+  function earnPassive(idleSeconds) {
+    const t = now();
+    const since = lastActivePoll ? t - lastActivePoll : 0;
+    lastActivePoll = t;
+    if (world.asleep || idleSeconds >= 60 || since <= 0 || since > 60000) return;
+    // dev mode runs every timer 60x fast; coins keep pace with it
+    const res = economy.addActive(econ, since / TIME_SCALE, dayKey(t));
+    econ = res.state;
+    if (res.paid) {
+      saveEcon(econ);
+      coinPop(res.paid);
+      if (rng() < 0.2) say('coins_earned');
+    } else {
+      store.set({ economy: econ });
+    }
+  }
+
+  /** The first hello of the day, with a bonus for every day in a row. */
+  function earnHello(t) {
+    const yesterday = dayKey(t - 24 * 3600000);
+    const res = economy.hello(econ, dayKey(t), yesterday);
+    if (!res.paid) return;
+    saveEcon(res.state);
+    setTimeout(() => {
+      if (quitting) return;
+      coinPop(res.paid);
+      say('daily_bonus', true);
+    }, 5200);
+  }
+
+  function arcadePayload() {
+    return economy.publicState(econ, {
+      equipped: store.get('flavor'),
+      rules: economy.RULES,
+      slotReturn: economy.slotReturn()
+    });
+  }
+
+  function pushArcade() {
+    if (arcadeWin && !arcadeWin.isDestroyed()) arcadeWin.webContents.send('arcade:update', arcadePayload());
+  }
+
+  /** Wear a Pip you own. Desktop Pip shows off the new look. */
+  function equip(id) {
+    if (!economy.owns(econ, id) || !Pips.BY_ID[id]) return false;
+    if (store.get('flavor') === id) return true;
+    store.set({ flavor: id });
+    sendSettings();
+    pushSettings();
+    pushArcade();
+    react('proud');
+    particles('sparkle', 6);
+    return true;
   }
 
   /* ---------------------------------------------------------------- *
@@ -536,6 +642,7 @@ function runApp(store) {
         say('pomodoro_done', true);
         notify('Nice focus!', 'That is one Pomodoro done. Time for a break.');
         bumpMood('pomodoro');
+        earnHabit('pomodoro');
         // Once the confetti has cleared, tell them what the break is for.
         setTimeout(() => {
           if (!quitting) say('break_start', true);
@@ -588,7 +695,9 @@ function runApp(store) {
     if (res.tookBreak) {
       bumpMood('break');
       persistStreak();
+      earnHabit('break');
     }
+    earnPassive(idleSeconds);
 
     // Away for five minutes or more and Pip curls up. A suspended or locked
     // machine stays asleep regardless of what the idle counter says - right
@@ -657,6 +766,7 @@ function runApp(store) {
     store.set({ lastGoodMorning: key });
     world.behavior = { clip: 'stretch', until: t + behaviorLength('stretch') };
     if (new Date(t).getHours() < 12) say('good_morning', true);
+    earnHello(t);
   }
 
   function maybeLateNight() {
@@ -750,7 +860,9 @@ function runApp(store) {
     return {
       settings: store.all,
       today: todayPayload(),
-      pomodoroRunning: store.get('pomodoro').phase !== 'off'
+      pomodoroRunning: store.get('pomodoro').phase !== 'off',
+      owned: economy.ownedIds(econ),
+      coins: econ.coins
     };
   }
 
@@ -787,6 +899,36 @@ function runApp(store) {
     settingsWin.once('ready-to-show', () => settingsWin.show());
     settingsWin.on('closed', () => { settingsWin = null; });
     return settingsWin;
+  }
+
+  function openArcade() {
+    if (arcadeWin && !arcadeWin.isDestroyed()) {
+      arcadeWin.show();
+      arcadeWin.focus();
+      return arcadeWin;
+    }
+    arcadeWin = new BrowserWindow({
+      width: 860,
+      height: 720,
+      minWidth: 760,
+      minHeight: 640,
+      title: "Pip's Arcade",
+      icon: path.join(__dirname, 'assets', 'icon-256.png'),
+      backgroundColor: '#1b1530',
+      autoHideMenuBar: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    });
+    arcadeWin.setMenu(null);
+    arcadeWin.loadFile(path.join(__dirname, 'arcade', 'arcade.html'));
+    arcadeWin.once('ready-to-show', () => arcadeWin.show());
+    arcadeWin.on('closed', () => { arcadeWin = null; });
+    return arcadeWin;
   }
 
   function openDebug() {
@@ -859,6 +1001,7 @@ function runApp(store) {
       { label: 'I drank water', click: () => doAction('water') },
       { label: 'Feed Pip', click: () => doAction('feed') },
       { label: 'Call Pip', click: () => doAction('call') },
+      { label: "Pip's Arcade", click: () => doAction('arcade') },
       { type: 'separator' },
       {
         label: quiet ? 'Quiet mode (on)' : 'Quiet mode for 1 hour',
@@ -915,6 +1058,7 @@ function runApp(store) {
         particles('water', 5);
         say('water_logged', true);
         bumpMood('water');
+        earnHabit('water');
         pushSettings();
         break;
       }
@@ -958,6 +1102,9 @@ function runApp(store) {
         break;
       case 'debug':
         openDebug();
+        break;
+      case 'arcade':
+        openArcade();
         break;
       case 'quit':
         quit();
@@ -1423,7 +1570,15 @@ function runApp(store) {
     ipcMain.handle('settings:get', () => settingsPayload());
 
     ipcMain.on('settings:set', (_e, payload) => {
-      const patch = (payload && payload.patch) || {};
+      const raw = (payload && payload.patch) || {};
+      const patch = {};
+      for (const k of Object.keys(raw)) if (USER_SETTINGS.indexOf(k) !== -1) patch[k] = raw[k];
+      if ('flavor' in patch) {
+        // wearing a Pip goes through equip(), which checks you own it
+        const id = patch.flavor;
+        delete patch.flavor;
+        equip(id);
+      }
       store.set(patch);
       if ('launchAtLogin' in patch) applyLoginItem();
       if ('appAware' in patch || 'appTitles' in patch) restartAppWatcher();
@@ -1436,6 +1591,68 @@ function runApp(store) {
 
     ipcMain.on('settings:action', (_e, payload) => {
       if (payload && payload.action) doAction(payload.action);
+    });
+
+    /* ---- the arcade ---- */
+
+    ipcMain.handle('arcade:get', () => arcadePayload());
+
+    ipcMain.handle('arcade:pull', (_e, payload) => {
+      const count = payload && payload.count === 10 ? 10 : 1;
+      const res = economy.pull(econ, count, rng, Pips.TYPES, now());
+      if (!res.ok) return { ok: false, error: res.error, state: arcadePayload() };
+      saveEcon(res.state);
+      const fresh = res.results.filter((r) => r.isNew);
+      if (fresh.length) {
+        // Desktop Pip is delighted about a new friend.
+        setTimeout(() => {
+          if (quitting) return;
+          react('excited');
+          particles('confetti', 10);
+          say('gacha_new', true);
+        }, 2600);
+      }
+      logger.info('gacha: ' + res.results.map((r) => r.id + (r.isNew ? '*' : '')).join(' '));
+      return { ok: true, results: res.results, paidWith: res.paidWith, state: arcadePayload() };
+    });
+
+    ipcMain.handle('arcade:spin', (_e, payload) => {
+      const bet = Number(payload && payload.bet);
+      const res = economy.spin(econ, bet, rng);
+      if (!res.ok) return { ok: false, error: res.error, state: arcadePayload() };
+      let next = res.state;
+      let bonus = null;
+      if (res.freePull) {
+        // the jackpot: a free capsule, rare or better
+        const free = economy.pull(next, 1, rng, Pips.TYPES, now(), { free: true, minRarity: 'rare' });
+        next = free.state;
+        bonus = free.results[0];
+      }
+      saveEcon(next);
+      if (res.freePull || res.payout >= bet * 10) {
+        setTimeout(() => {
+          if (quitting) return;
+          react('excited');
+          say('slot_jackpot', true);
+        }, 2200);
+      }
+      return {
+        ok: true, stops: res.stops, reels: res.reels, payout: res.payout, name: res.name,
+        ticket: res.ticket, freePull: res.freePull, bonus: bonus, state: arcadePayload()
+      };
+    });
+
+    ipcMain.handle('arcade:game-end', (_e, payload) => {
+      const game = payload && payload.game;
+      const res = economy.gameEnd(econ, game, payload && payload.score, dayKey());
+      saveEcon(res.state);
+      if (res.paid) coinPop(res.paid);
+      if (res.highScore) say('game_highscore', true);
+      return { paid: res.paid, highScore: res.highScore, best: res.state.highScores[game] || 0, state: arcadePayload() };
+    });
+
+    ipcMain.on('arcade:equip', (_e, payload) => {
+      if (payload && typeof payload.id === 'string') equip(payload.id);
     });
 
     /* ---- debug window ---- */
@@ -1538,24 +1755,137 @@ function runApp(store) {
         // so check it actually rendered a preview per flavour rather than just
         // that the window opened - a blocked script would fail silently.
         const win = openSettings();
+        const owned = economy.ownedIds(econ).length;
         win.once('ready-to-show', () => {
           setTimeout(() => {
             win.webContents
               .executeJavaScript('document.querySelectorAll(".flavor canvas").length', true)
               .then((count) => {
                 try { win.close(); } catch (err) { /* already gone */ }
-                if (count !== 6) {
-                  return fail('settings rendered ' + count + ' flavour previews, expected 6');
+                if (count !== owned) {
+                  return fail('settings rendered ' + count + ' Pip previews, expected ' + owned);
                 }
-                process.stdout.write('SMOKE OK settings window rendered 6 flavour previews\n');
-                quitting = true;
-                app.exit(0);
+                process.stdout.write('SMOKE OK settings window rendered ' + owned + ' Pip previews\n');
+                return smokeArcade(fail);
               })
               .catch((err) => fail('settings check threw: ' + err.message));
           }, 600);
         });
       })
       .catch((err) => fail('playAll threw: ' + err.message));
+  }
+
+  /**
+   * Screenshots of the arcade: each machine mid-animation and at rest, the
+   * Pipdex, the earning page and each game in play.
+   */
+  function shootArcade(fs) {
+    econ = Object.assign({}, econ, { coins: Math.max(econ.coins, 20000) });
+    store.set({ economy: econ });
+    const win = openArcade();
+    const js = (code) => win.webContents.executeJavaScript(code, true);
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let n = 0;
+    const shot = async (name) => {
+      const img = await win.webContents.capturePage();
+      fs.writeFileSync(path.join(SHOTS_DIR, String(n++).padStart(2, '0') + '_' + name + '.png'), img.toPNG());
+    };
+    const click = (sel) => js('document.querySelector(' + JSON.stringify(sel) + ').click()');
+    win.once('ready-to-show', () => {
+      (async () => {
+        for (let i = 0; i < 40 && !(await js('window.__arcade && window.__arcade.ready()')); i++) await wait(100);
+        await click('[data-tab="gacha"]');
+        await wait(600);
+        await shot('gacha_idle');
+        await click('#pull1');
+        await wait(1500);
+        await shot('gacha_crank');
+        await wait(1300);
+        await shot('gacha_wobble');
+        await wait(1500);
+        await shot('gacha_reveal');
+        await js('document.getElementById("gacha").dispatchEvent(new MouseEvent("click", {clientX: 0, clientY: 0}))');
+        await wait(400);
+        await click('#pull10');
+        await wait(3200);
+        await shot('gacha_ten_row');
+        await click('#gachaSkip');
+        await wait(4200);
+        await shot('gacha_ten_open');
+        await click('[data-tab="slots"]');
+        await wait(500);
+        await shot('slots_idle');
+        await click('#spin');
+        await wait(700);
+        await shot('slots_spinning');
+        await wait(2400);
+        await shot('slots_result');
+        await click('[data-tab="pipdex"]');
+        await wait(600);
+        await shot('pipdex');
+        await js('document.querySelector(".pip-card:not(.locked)").click()');
+        await wait(900);
+        await shot('pipdex_detail');
+        await click('#detailClose');
+        await click('[data-tab="earn"]');
+        await wait(400);
+        await shot('earn');
+        for (const g of economy.GAME_NAMES) {
+          await click('[data-tab="play"]');
+          await wait(200);
+          await click('[data-game="' + g + '"]');
+          await wait(500);
+          await shot('game_' + g + '_title');
+          await js('document.getElementById("game").dispatchEvent(new MouseEvent("mousedown", {clientX: 400, clientY: 300}))');
+          await wait(2500);
+          if (g === 'match') {
+            await js('(function(){const c=document.getElementById("game");const r=c.getBoundingClientRect();' +
+              'for(const [x,y] of [[70,40],[130,40]]){c.dispatchEvent(new MouseEvent("mousedown",{clientX:r.left+x*r.width/320,clientY:r.top+y*r.height/200}));}})()');
+            await wait(300);
+          }
+          await shot('game_' + g + '_play');
+          await click('#gameBack');
+        }
+        process.stdout.write('SHOTS OK arcade -> ' + SHOTS_DIR + '\n');
+        quitting = true;
+        app.exit(0);
+      })().catch((err) => {
+        process.stdout.write('SHOTS FAIL ' + err.message + '\n');
+        app.exit(1);
+      });
+    });
+  }
+
+  /**
+   * The arcade: every card in the Pipdex drawn, one real pull and one real
+   * spin through main, and each game's title card opened. The smoke profile
+   * is topped up first so the pull can never fail for want of coins.
+   */
+  function smokeArcade(fail) {
+    econ = Object.assign({}, econ, { coins: Math.max(econ.coins, 5000) });
+    store.set({ economy: econ });
+    const win = openArcade();
+    const js = (code) => win.webContents.executeJavaScript(code, true);
+    win.once('ready-to-show', () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      (async () => {
+        for (let i = 0; i < 40 && !(await js('window.__arcade && window.__arcade.ready()')); i++) await wait(100);
+        const cards = await js('window.__arcade.cards()');
+        if (cards !== Pips.TYPES.length) return fail('arcade drew ' + cards + ' Pipdex cards, expected ' + Pips.TYPES.length);
+        const pulled = await js('window.__arcade.pull()');
+        if (pulled !== 1) return fail('arcade pull: ' + pulled);
+        const spun = await js('window.__arcade.spin()');
+        if (spun !== 3) return fail('arcade spin: ' + spun);
+        for (const g of economy.GAME_NAMES) {
+          if (!(await js('window.__arcade.game(' + JSON.stringify(g) + ')'))) return fail('arcade has no game ' + g);
+          await wait(150);
+        }
+        process.stdout.write('SMOKE OK arcade: ' + cards + ' Pipdex cards, a pull, a spin and ' + economy.GAME_NAMES.length + ' games\n');
+        try { win.close(); } catch (err) { /* already gone */ }
+        quitting = true;
+        app.exit(0);
+      })().catch((err) => fail('arcade check threw: ' + err.message));
+    });
   }
 
   /**
@@ -1566,6 +1896,7 @@ function runApp(store) {
   function runShots() {
     const fs = require('fs');
     fs.mkdirSync(SHOTS_DIR, { recursive: true });
+    if (process.argv.includes('--shots-arcade')) { shootArcade(fs); return; }
     const only = (process.argv.find((a) => a.startsWith('--shots-clips=')) || '').slice('--shots-clips='.length);
     const clips = only ? only.split(',') : Animations.CLIP_NAMES;
     const typeArg = (process.argv.find((a) => a.startsWith('--shots-type=')) || '').slice('--shots-type='.length);
@@ -1647,7 +1978,7 @@ function runApp(store) {
         logger.error('SMOKE FAIL timed out');
         process.stdout.write('SMOKE FAIL timed out\n');
         app.exit(1);
-      }, 20000);
+      }, 40000);
     }
   });
 }

@@ -78,6 +78,32 @@ contextBridge.exposeInMainWorld('pipSettings', {
   }
 });
 
+/* ------------------------------------------------------------------ *
+ * Pip's Arcade
+ *
+ * The arcade asks; main decides. Every coin, pull and spin is worked out in
+ * the main process (src/main/economy.js) and the window only animates the
+ * result it is handed back.
+ * ------------------------------------------------------------------ */
+
+contextBridge.exposeInMainWorld('pipArcade', {
+  /** @returns {Promise<object>} the balance, the collection and the rules */
+  get: () => ipcRenderer.invoke('arcade:get'),
+  /** @param {number} count 1 or 10 */
+  pull: (count) => ipcRenderer.invoke('arcade:pull', { count: count }),
+  /** @param {number} bet one of the allowed bets */
+  spin: (bet) => ipcRenderer.invoke('arcade:spin', { bet: bet }),
+  /** a minigame finished */
+  gameEnd: (game, score) => ipcRenderer.invoke('arcade:game-end', { game: game, score: score }),
+  /** wear this Pip (must be one you own) */
+  equip: (id) => ipcRenderer.send('arcade:equip', { id: id }),
+  onUpdate: (handler) => {
+    const wrapped = (_event, payload) => handler(payload);
+    ipcRenderer.on('arcade:update', wrapped);
+    return () => ipcRenderer.removeListener('arcade:update', wrapped);
+  }
+});
+
 contextBridge.exposeInMainWorld('pipDebug', {
   onState: (handler) => {
     const wrapped = (_event, payload) => handler(payload);

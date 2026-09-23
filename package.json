@@ -35,6 +35,7 @@
       "src/**/*",
       "settings/**/*",
       "debug/**/*",
+      "arcade/**/*",
       "assets/**/*",
       "!**/*.md",
       "!**/.DS_Store"

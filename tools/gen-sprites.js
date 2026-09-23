@@ -393,6 +393,28 @@ function composeFrame(spec) {
 
   drawProps(over);
 
+  /* ---- eyes the runtime may redraw ----
+   * A paw or a prop drawn after the face can cover part of an eye (a juggling
+   * paw, a mug to the lips). The runtime lifts an eye off by restoring what
+   * was under it, which would erase whatever covered it - so an eye is only
+   * live if its whole box still holds exactly the eye and what was beneath. */
+  const intact = liveEyes.filter((eye) => {
+    const rows = Compose.eyeRows(eye.style, eye.mirror);
+    for (let dr = -1; dr <= rows.length; dr++) {
+      for (let dc = -1; dc <= Compose.EYE_W; dc++) {
+        const r = eye.r + dr, c = eye.c + dc;
+        if (!inBounds(r, c)) continue;
+        const tpl = rows[dr] && rows[dr][dc];
+        const under = eye.under[dr + 1][dc + 1];
+        const expect = tpl && tpl !== T && Compose.PAINTABLE[under] ? tpl : under;
+        if (g[r][c] !== expect) return false;
+      }
+    }
+    return true;
+  });
+  liveEyes.length = 0;
+  if (intact.length === 2) liveEyes.push.apply(liveEyes, intact);
+
   /* ---- metadata ---- */
   const extent = columnExtents(bodyMask);
   const cols = Object.keys(extent.top).map(Number);
