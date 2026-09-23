@@ -52,10 +52,11 @@ function countChar(frame, ch) {
 test('there are frames at all', () => {
   assert.ok(Sprites.FRAME_NAMES.length > 0, 'no frames');
   assert.deepStrictEqual(Sprites.FRAME_NAMES, Object.keys(Sprites.FRAMES));
-  assert.strictEqual(SIZE, 32);
+  assert.strictEqual(SIZE, 64);
+  assert.strictEqual(Sprites.FOOT_ROW, 62);
 });
 
-test('every frame is 32 rows of 32 characters', () => {
+test('every frame is 64 rows of 64 characters', () => {
   for (const name of Sprites.FRAME_NAMES) {
     const frame = Sprites.FRAMES[name];
     assert.ok(Array.isArray(frame), name + ' is not an array');
@@ -101,6 +102,45 @@ test('every frame is outlined', () => {
   for (const name of Sprites.FRAME_NAMES) {
     const n = countChar(Sprites.FRAMES[name], 'O');
     assert.ok(n >= 1, name + ' has no outline pixels');
+  }
+});
+
+test('every frame has metadata the runtime can use', () => {
+  for (const name of Sprites.FRAME_NAMES) {
+    const m = Sprites.FRAME_META[name];
+    assert.ok(m, name + ' has no FRAME_META entry');
+    assert.ok(m.view === 'side' || m.view === 'front', name + ' view');
+    assert.ok([0, 90, -90].indexOf(m.rotate) !== -1, name + ' rotate');
+    for (const k of ['cx', 'cy', 'w', 'h']) assert.strictEqual(typeof m.body[k], 'number', name + ' body.' + k);
+    const inside = (p) => p && p.r >= 0 && p.r < SIZE && p.c >= 0 && p.c < SIZE;
+    assert.ok(inside(m.crown), name + ' crown is off the frame');
+    assert.ok(inside(m.ends.back) && inside(m.ends.front), name + ' ends are off the frame');
+    assert.strictEqual(typeof m.hat, 'boolean', name + ' hat');
+    assert.ok(Array.isArray(m.eyes), name + ' eyes');
+  }
+  assert.deepStrictEqual(Object.keys(Sprites.FRAME_META), Sprites.FRAME_NAMES);
+});
+
+test('live eyes carry exactly what was under them', () => {
+  // compose.js lifts an eye off by restoring these pixels, one pixel of
+  // margin all round, so the box has to be exactly that size.
+  const Compose = require('../src/renderer/compose.js');
+  let live = 0;
+  for (const name of Sprites.FRAME_NAMES) {
+    for (const eye of Sprites.FRAME_META[name].eyes) {
+      live++;
+      assert.ok(Compose.LIVE_EYES[eye.style], name + ' records a non-live eye style ' + eye.style);
+      const h = Compose.EYES[eye.style].length;
+      assert.strictEqual(eye.under.length, h + 2, name + ' eye under height');
+      for (const row of eye.under) assert.strictEqual(row.length, Compose.EYE_W + 2, name + ' eye under width');
+    }
+  }
+  assert.ok(live > 50, 'hardly any frames have live eyes (' + live + ')');
+});
+
+test('every hat prop is flagged, so a type decoration never clashes with it', () => {
+  for (const name of Sprites.FRAME_NAMES) {
+    if (/_cap$/.test(name)) assert.strictEqual(Sprites.FRAME_META[name].hat, true, name + ' wears a nightcap but hat is false');
   }
 });
 

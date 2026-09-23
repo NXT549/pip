@@ -12,10 +12,12 @@
   const api = window.pipSettings;
   const Palettes = window.Pip && window.Pip.Palettes;
   const Sprites = window.Pip && window.Pip.Sprites;
+  const Compose = window.Pip && window.Pip.Compose;
+  const Pips = window.Pip && window.Pip.Pips;
 
   /** The frame used for the little flavour previews. */
   const PREVIEW_FRAME = 'idle_0';
-  const PREVIEW_SCALE = 2;
+  const PREVIEW_SCALE = 1.5;
 
   /** Controls that map straight onto a settings key. */
   const NUMBER_FIELDS = [
@@ -32,10 +34,11 @@
    * ---------------------------------------------------------------- */
 
   function drawPreview(canvas, flavor) {
-    if (!Palettes || !Sprites) return;
-    const rows = Sprites.FRAMES[PREVIEW_FRAME] || Sprites.FRAMES[Sprites.FRAME_NAMES[0]];
+    if (!Palettes || !Sprites || !Compose || !Pips) return;
+    const type = Pips.get(flavor);
+    const rows = Compose.compose(PREVIEW_FRAME, { type: type }) || Sprites.FRAMES[Sprites.FRAME_NAMES[0]];
     if (!rows) return;
-    const palette = Palettes.resolve(flavor);
+    const palette = Palettes.resolve(type.palette);
     const N = Sprites.FRAME_SIZE;
 
     // Crop to Pip so the preview is not mostly empty space.
@@ -77,9 +80,9 @@
 
   function buildFlavors() {
     const host = document.getElementById('flavors');
-    if (!host || !Palettes) return;
+    if (!host || !Palettes || !Pips) return;
     host.textContent = '';
-    for (const name of Palettes.FLAVOR_NAMES) {
+    for (const name of Pips.STARTERS) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'flavor';
@@ -88,7 +91,7 @@
 
       const canvas = document.createElement('canvas');
       const label = document.createElement('span');
-      label.textContent = name;
+      label.textContent = Pips.get(name).name;
 
       button.appendChild(canvas);
       button.appendChild(label);

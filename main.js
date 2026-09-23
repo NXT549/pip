@@ -34,7 +34,14 @@ const Animations = require('./src/renderer/animations.js');
  * ------------------------------------------------------------------ */
 
 const IS_SMOKE = process.argv.includes('--smoke');
-const IS_DEV = process.argv.includes('--dev') || (!app.isPackaged && !IS_SMOKE);
+/**
+ * --shots=<dir> (unpackaged only): play a list of clips and screenshot each
+ * one into <dir>, then quit. How the art gets checked in the real overlay
+ * without anyone sitting at the machine.
+ */
+const SHOTS_DIR = app.isPackaged ? null
+  : ((process.argv.find((a) => a.startsWith('--shots=')) || '').slice('--shots='.length) || null);
+const IS_DEV = process.argv.includes('--dev') || (!app.isPackaged && !IS_SMOKE && !SHOTS_DIR);
 const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
 
 /** Dev runs compress every duration by 60x so a 25 minute block takes 25s. */
@@ -46,7 +53,7 @@ const TIME_SCALE = IS_DEV ? 1 / 60 : 1;
  */
 if (IS_DEV) {
   app.setPath('userData', path.join(app.getPath('appData'), 'Pip-dev'));
-} else if (IS_SMOKE) {
+} else if (IS_SMOKE || SHOTS_DIR) {
   app.setPath('userData', path.join(app.getPath('appData'), 'Pip-smoke'));
 }
 
@@ -92,7 +99,8 @@ function runApp(store) {
   let currentDisplayId = null;
   let quitting = false;
 
-  const SCALE_BY_SIZE = { small: 3, medium: 4, large: 5 };
+  /** Screen pixels per art pixel. The art is 64px, so medium is 128 DIP. */
+  const SCALE_BY_SIZE = { small: 1.5, medium: 2, large: 2.5 };
   const MINUTE = 60000;
 
   /** Reaction lengths, before the dev time scale. */
@@ -157,7 +165,7 @@ function runApp(store) {
    * ---------------------------------------------------------------- */
 
   function scale() {
-    return SCALE_BY_SIZE[store.get('petSize')] || 4;
+    return SCALE_BY_SIZE[store.get('petSize')] || 2;
   }
 
   function targetDisplay() {
@@ -1016,6 +1024,7 @@ function runApp(store) {
       sendBounds();
       sendPomodoro();
       if (IS_SMOKE) { runSmoke(); return; }
+      if (SHOTS_DIR) { runShots(); return; }
       runOnboarding();
     });
 
@@ -1270,6 +1279,46 @@ function runApp(store) {
         });
       })
       .catch((err) => fail('playAll threw: ' + err.message));
+  }
+
+  /**
+   * Screenshot mode. Each step names a clip (and optionally a type); Pip is
+   * pinned to it the same way the debug panel pins one, given a moment to
+   * settle, and the area around him is captured to a PNG.
+   */
+  function runShots() {
+    const fs = require('fs');
+    fs.mkdirSync(SHOTS_DIR, { recursive: true });
+    const only = (process.argv.find((a) => a.startsWith('--shots-clips=')) || '').slice('--shots-clips='.length);
+    const clips = only ? only.split(',') : Animations.CLIP_NAMES;
+    const typeArg = (process.argv.find((a) => a.startsWith('--shots-type=')) || '').slice('--shots-type='.length);
+    if (typeArg) { store.set({ flavor: typeArg }); sendSettings(); }
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    (async () => {
+      await wait(1500);
+      let i = 0;
+      for (const clip of clips) {
+        world.forced.clip = clip;
+        world.lastState = null;
+        await wait(Math.min(1400, Math.max(500, Animations.clipDuration(clip) * 0.4)));
+        const pos = await overlay.webContents.executeJavaScript('window.__pip.state()', true);
+        const s = scale();
+        const rect = {
+          x: Math.max(0, Math.round(pos.x - 90 * s)),
+          y: Math.max(0, Math.round(pos.y - 110 * s)),
+          width: Math.round(180 * s),
+          height: Math.round(120 * s)
+        };
+        const img = await overlay.webContents.capturePage(rect);
+        fs.writeFileSync(require('path').join(SHOTS_DIR, String(i++).padStart(2, '0') + '_' + clip + '.png'), img.toPNG());
+      }
+      process.stdout.write('SHOTS OK ' + clips.length + ' -> ' + SHOTS_DIR + '\n');
+      quitting = true;
+      app.exit(0);
+    })().catch((err) => {
+      process.stdout.write('SHOTS FAIL ' + err.message + '\n');
+      app.exit(1);
+    });
   }
 
   /* ---------------------------------------------------------------- *

@@ -18,10 +18,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
-
+const { encodePNG, crc32 } = require('./png.js');
 const Palettes = require('../src/renderer/palettes.js');
 const Sprites = require('../src/renderer/sprites.js');
+const Compose = require('../src/renderer/compose.js');
+const Pips = require('../src/renderer/pips.js');
 
 const ROOT = path.join(__dirname, '..');
 const ICON_SIZES = [16, 32, 48, 64, 128, 256];
@@ -29,68 +30,6 @@ const ICON_SIZES = [16, 32, 48, 64, 128, 256];
 const ICO_SIZES = [16, 32, 48, 64, 128, 256];
 const SOURCE_FRAME = 'idle_0';
 const SOURCE_FLAVOR = 'cherry';
-
-/* ------------------------------------------------------------------ *
- * PNG encoding
- * ------------------------------------------------------------------ */
-
-const CRC_TABLE = (() => {
-  const table = new Int32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    table[n] = c;
-  }
-  return table;
-})();
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length, 0);
-  const typeBuf = Buffer.from(type, 'ascii');
-  const body = Buffer.concat([typeBuf, data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body), 0);
-  return Buffer.concat([len, body, crc]);
-}
-
-/**
- * @param {Uint8Array} rgba  width*height*4
- */
-function encodePNG(rgba, width, height) {
-  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8;   // bit depth
-  ihdr[9] = 6;   // colour type: truecolour with alpha
-  ihdr[10] = 0;  // deflate
-  ihdr[11] = 0;  // adaptive filtering
-  ihdr[12] = 0;  // no interlace
-
-  // Each scanline is prefixed with its filter type; 0 (None) keeps this simple
-  // and these images are tiny, so the compression loss does not matter.
-  const stride = width * 4;
-  const raw = Buffer.alloc((stride + 1) * height);
-  for (let y = 0; y < height; y++) {
-    raw[y * (stride + 1)] = 0;
-    Buffer.from(rgba.buffer, rgba.byteOffset + y * stride, stride).copy(raw, y * (stride + 1) + 1);
-  }
-
-  return Buffer.concat([
-    sig,
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0))
-  ]);
-}
 
 /* ------------------------------------------------------------------ *
  * ICO container
@@ -124,48 +63,24 @@ function encodeICO(images) {
  * Rasterising Pip
  * ------------------------------------------------------------------ */
 
-function hexToRGB(hex) {
-  return [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16)
-  ];
-}
-
-/** The sprite frame as an RGBA buffer, cropped to Pip's bounding box. */
-function frameToRGBA(frameName, flavor) {
-  const rows = Sprites.FRAMES[frameName];
+/** The composed frame as an RGBA buffer, cropped to Pip's bounding box. */
+function frameToRGBA(frameName, typeId) {
+  const type = Pips.get(typeId);
+  const rows = Compose.compose(frameName, { type: type });
   if (!rows) throw new Error('no such frame: ' + frameName);
-  const palette = Palettes.resolve(flavor);
+  const box = Compose.bbox(rows);
+  if (box.maxR < 0) throw new Error('frame is empty: ' + frameName);
+  const full = Compose.toRGBA(rows, Palettes.resolve(type.palette));
   const N = Sprites.FRAME_SIZE;
-
-  let minR = N, maxR = -1, minC = N, maxC = -1;
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
-      if (rows[r][c] === Palettes.TRANSPARENT) continue;
-      if (r < minR) minR = r;
-      if (r > maxR) maxR = r;
-      if (c < minC) minC = c;
-      if (c > maxC) maxC = c;
+  const out = new Uint8Array(box.w * box.h * 4);
+  for (let r = 0; r < box.h; r++) {
+    for (let c = 0; c < box.w; c++) {
+      const si = ((box.minR + r) * N + box.minC + c) * 4;
+      const di = (r * box.w + c) * 4;
+      out[di] = full[si]; out[di + 1] = full[si + 1]; out[di + 2] = full[si + 2]; out[di + 3] = full[si + 3];
     }
   }
-  if (maxR < 0) throw new Error('frame is empty: ' + frameName);
-
-  const w = maxC - minC + 1;
-  const h = maxR - minR + 1;
-  const out = new Uint8Array(w * h * 4);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const ch = rows[minR + r][minC + c];
-      const i = (r * w + c) * 4;
-      if (ch === Palettes.TRANSPARENT) continue;
-      const color = palette[ch];
-      if (!color) continue;
-      const [rr, gg, bb] = hexToRGB(color);
-      out[i] = rr; out[i + 1] = gg; out[i + 2] = bb; out[i + 3] = 255;
-    }
-  }
-  return { data: out, width: w, height: h };
+  return { data: out, width: box.w, height: box.h };
 }
 
 /**

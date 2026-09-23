@@ -24,10 +24,14 @@
   const Physics = P.Physics;
   const Particles = P.Particles;
   const Bubbles = P.Bubbles;
+  const Compose = P.Compose;
+  const Pips = P.Pips;
 
   const SIZE = Sprites.FRAME_SIZE;
   /** Sprite row the feet rest on, plus one, so we can sit Pip on the floor. */
-  const FOOT_OFFSET = 31;
+  const FOOT_OFFSET = Sprites.FOOT_ROW;
+  /** The art was 32px wide once; offsets below are in those units. */
+  const OLD_SIZE = 32;
   const TARGET_FPS = 30;
   const SLEEP_FPS = 5;
 
@@ -37,8 +41,19 @@
   const STARTLE_SPEED = 1400;      // DIP/s
   const STARTLE_RANGE = 130;       // DIP
   const STARTLE_COOLDOWN = 6000;
-  /** Eye tracking kicks in inside this radius. */
-  const LOOK_RANGE = 220;
+  /** Eyes follow the pointer inside this radius. */
+  const LOOK_RANGE = 700;
+  /** ...and turn once it is this far off-centre, with a little hysteresis. */
+  const LOOK_X = 26;
+  const LOOK_Y = 34;
+
+  /** A blink every few seconds; now and then a double. */
+  const BLINK_MIN_MS = 2400;
+  const BLINK_MAX_MS = 6200;
+  const BLINK_MS = 110;
+
+  /** Composed frames kept ready to draw. Each is a 64x64 canvas (16 KB). */
+  const CACHE_MAX = 320;
 
   /** Above this ground speed Pip is running, not trotting. */
   const RUN_SPEED = 70;            // DIP/s
@@ -63,8 +78,21 @@
   let bounds = { left: 0, right: 100, top: 0, bottom: 100, width: 100, height: 100 };
   let dpr = window.devicePixelRatio || 1;
 
-  /** frameName -> offscreen canvas, rebuilt on flavour/scale change */
-  let frameCache = Object.create(null);
+  /**
+   * key -> {canvas, rows}. Frames are composed on demand - the type's
+   * pattern and trait, the eyes where they are looking, a blink - at the
+   * art's own 64x64 and scaled up when drawn. That is far less memory than
+   * pre-rendering every frame at screen size, and a type change costs
+   * nothing until a frame is actually shown.
+   */
+  let frameCache = new Map();
+  let palette = null;
+  let pipType = null;
+
+  let look = { dx: 0, dy: 0 };
+  let blinkAt = 0;
+  let blinkUntil = 0;
+  let blinkAgain = false;
 
   let body = Physics.createBody(120, 100);
   let clip = 'idle';
@@ -129,42 +157,56 @@
    * Pre-rendering
    * ---------------------------------------------------------------- */
 
-  /**
-   * Draw every frame once into its own canvas at the current scale, so the
-   * animation loop only ever does a single drawImage per frame.
-   */
+  /** Forget every composed frame - the Pip type changed. */
   function prerender() {
-    const palette = Palettes.resolve(settings.flavor);
-    const px = settings.scale * dpr;      // device pixels per sprite pixel
-    const cache = Object.create(null);
-
-    for (const name of Sprites.FRAME_NAMES) {
-      const rows = Sprites.FRAMES[name];
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(SIZE * px));
-      c.height = Math.max(1, Math.round(SIZE * px));
-      const g = c.getContext('2d');
-      g.imageSmoothingEnabled = false;
-      for (let r = 0; r < SIZE; r++) {
-        const row = rows[r];
-        for (let col = 0; col < SIZE; col++) {
-          const ch = row[col];
-          if (ch === Palettes.TRANSPARENT) continue;
-          const color = palette[ch];
-          if (!color) continue;
-          g.fillStyle = color;
-          // round outwards so neighbouring pixels never leave a seam
-          const x0 = Math.round(col * px);
-          const y0 = Math.round(r * px);
-          const x1 = Math.round((col + 1) * px);
-          const y1 = Math.round((r + 1) * px);
-          g.fillRect(x0, y0, x1 - x0, y1 - y0);
-        }
-      }
-      cache[name] = c;
-    }
-    frameCache = cache;
+    pipType = Pips.get(settings.flavor);
+    palette = Palettes.resolve(pipType.palette);
+    frameCache = new Map();
     lastDrawKey = '';
+  }
+
+  /** Do this frame's eyes follow the pointer and blink at all? */
+  function hasLiveEyes(name) {
+    const meta = Sprites.FRAME_META[name];
+    return !!(meta && meta.eyes && meta.eyes.length);
+  }
+
+  /**
+   * The composed frame for `name` with the current look and blink, built on
+   * first use. Returns {canvas, rows}; rows are what hit testing reads, so a
+   * stem or a crown is as clickable as the rest of Pip.
+   */
+  function getFrame(name) {
+    const live = hasLiveEyes(name);
+    const lx = live ? look.dx : 0;
+    const ly = live ? look.dy : 0;
+    const bl = live && isBlinking();
+    const key = name + '|' + lx + '|' + ly + '|' + (bl ? 1 : 0);
+    let entry = frameCache.get(key);
+    if (entry) {
+      // refresh its place in the LRU order
+      frameCache.delete(key);
+      frameCache.set(key, entry);
+      return entry;
+    }
+    const rows = Compose.compose(name, { type: pipType, look: { dx: lx, dy: ly }, blink: bl });
+    if (!rows) return null;
+    const c = document.createElement('canvas');
+    c.width = SIZE;
+    c.height = SIZE;
+    const g = c.getContext('2d');
+    const img = g.createImageData(SIZE, SIZE);
+    img.data.set(Compose.toRGBA(rows, palette));
+    g.putImageData(img, 0, 0);
+    entry = { canvas: c, rows: rows };
+    frameCache.set(key, entry);
+    if (frameCache.size > CACHE_MAX) frameCache.delete(frameCache.keys().next().value);
+    return entry;
+  }
+
+  /** DIPs per pixel of the old 32px art: the unit every offset below uses. */
+  function unit() {
+    return settings.scale * SIZE / OLD_SIZE;
   }
 
   function resizeCanvas() {
@@ -203,7 +245,8 @@
    * Tests the sprite data directly, which is exact and costs nothing.
    */
   function hitTest(x, y) {
-    const rows = Sprites.FRAMES[currentFrame];
+    const entry = getFrame(currentFrame);
+    const rows = entry ? entry.rows : Sprites.FRAMES[currentFrame];
     if (!rows) return false;
     const rect = spriteRect();
     if (x < rect.left || x >= rect.left + rect.width) return false;
@@ -274,9 +317,10 @@
         if (next) setClip(next, now);
       }
     }
-    applyLook();
     applyStandStill(now);
     applyNightcap();
+    updateBlink(now);
+    updateLook();
   }
 
   /**
@@ -307,22 +351,55 @@
     if (Sprites.FRAMES[capped]) currentFrame = capped;
   }
 
-  /**
-   * Eye tracking. The frames are pre-rendered so the pupils cannot be moved
-   * directly - instead, when the cursor is close and Pip is just standing
-   * about, swap in the look-around frames. It reads as Pip following you.
-   */
-  function applyLook() {
-    if (pipState !== 'idle' || clip !== 'idle' || drag) return;
-    if (!cursor.inside) return;
-    const c = pipCenter();
-    const dx = cursor.x - c.x;
-    const dy = cursor.y - c.y;
-    if (Math.hypot(dx, dy) > LOOK_RANGE) return;
+  /** Where Pip's eyes are on screen right now, or his head if unknown. */
+  function eyePoint() {
+    const rect = spriteRect();
+    const meta = Sprites.FRAME_META[currentFrame];
+    if (!meta || !meta.eyes || !meta.eyes.length) return headPoint();
+    let r = 0, c = 0;
+    for (const e of meta.eyes) { r += e.r + 3.5; c += e.c + 2.5; }
+    r /= meta.eyes.length;
+    c /= meta.eyes.length;
+    if (body.facing === -1) c = SIZE - c;
+    return { x: rect.left + (c / SIZE) * rect.width, y: rect.top + (r / SIZE) * rect.height };
+  }
 
-    const behind = (body.facing === 1 && dx < -20) || (body.facing === -1 && dx > 20);
-    if (behind && Sprites.FRAMES.idle_look_back) currentFrame = 'idle_look_back';
-    else if (dy < -40 && Sprites.FRAMES.idle_look_up) currentFrame = 'idle_look_up';
+  /**
+   * Eye tracking. Any pose with open eyes has its eyes redrawn one pixel
+   * toward the pointer (compose.js), so Pip watches you whatever he is doing
+   * - trotting, carrying his cup, dangling from your hand.
+   */
+  function updateLook() {
+    let want = { dx: 0, dy: 0 };
+    if (cursor.inside && hasLiveEyes(currentFrame)) {
+      const e = eyePoint();
+      let dx = cursor.x - e.x;
+      const dy = cursor.y - e.y;
+      if (Math.hypot(dx, dy) <= LOOK_RANGE) {
+        dx *= body.facing;   // in the sprite's own, right-facing, terms
+        const axis = (d, cur, lim) => (Math.abs(d) > lim ? Math.sign(d) : Math.abs(d) < lim * 0.6 ? 0 : cur);
+        want = { dx: axis(dx, look.dx, LOOK_X), dy: axis(dy, look.dy, LOOK_Y) };
+      }
+    }
+    look = want;
+  }
+
+  function isBlinking() {
+    return lastTick < blinkUntil;
+  }
+
+  /** Blinks run on their own timer, in every pose that has open eyes. */
+  function updateBlink(now) {
+    if (!blinkAt) blinkAt = now + BLINK_MIN_MS + Math.random() * (BLINK_MAX_MS - BLINK_MIN_MS);
+    if (now < blinkAt) return;
+    blinkUntil = now + BLINK_MS;
+    if (!blinkAgain && Math.random() < 0.2) {
+      blinkAgain = true;
+      blinkAt = now + BLINK_MS + 130;
+    } else {
+      blinkAgain = false;
+      blinkAt = now + BLINK_MIN_MS + Math.random() * (BLINK_MAX_MS - BLINK_MIN_MS);
+    }
   }
 
   /* ---------------------------------------------------------------- *
@@ -401,8 +478,9 @@
 
   function drawPip() {
     const rect = spriteRect();
-    const img = frameCache[currentFrame];
-    if (!img) return;
+    const entry = getFrame(currentFrame);
+    if (!entry) return;
+    const img = entry.canvas;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     // Carried, Pip hangs from the pointer and swings behind the direction of
@@ -424,17 +502,43 @@
     ctx.restore();
   }
 
+  /**
+   * A soft pixel shadow on the floor under Pip. It shrinks and fades as he
+   * leaves the ground, which is most of what makes a jump read as a jump.
+   */
+  function drawShadow() {
+    if (drag || body.climbing) return;
+    const floor = worldBounds().bottom;
+    const lift = Math.max(0, floor - body.y);
+    const fade = Math.max(0, 1 - lift / (SIZE * settings.scale * 1.6));
+    if (fade <= 0.05) return;
+    const px = settings.scale;
+    const half = Math.round(15 * fade + 5);
+    const cx = body.x;
+    const y = Math.round(floor - px * 0.5);
+    ctx.save();
+    ctx.fillStyle = 'rgba(30, 18, 34, ' + (0.2 * fade).toFixed(3) + ')';
+    // three stacked rows of pixels make a flattened oval
+    const rows = [[half - 3, -1], [half, 0], [half - 3, 1]];
+    for (const [w, dy] of rows) {
+      if (w <= 0) continue;
+      ctx.fillRect(Math.round(cx - w * px), y + dy * px, Math.round(w * 2 * px), px);
+    }
+    ctx.restore();
+  }
+
   /** A thin ring above Pip's head while a Pomodoro is running. */
   function drawRing() {
     if (!pomodoro.running || !pomodoro.totalMs) return;
     const head = headPoint();
-    const r = settings.scale * 5;
+    const u = unit();
+    const r = u * 5;
     const cx = head.x;
-    const cy = head.y - r - settings.scale * 2;
+    const cy = head.y - r - u * 2;
     const done = 1 - Math.max(0, Math.min(1, pomodoro.remainingMs / pomodoro.totalMs));
 
     ctx.save();
-    ctx.lineWidth = Math.max(2, settings.scale * 0.7);
+    ctx.lineWidth = Math.max(2, u * 0.7);
     ctx.strokeStyle = 'rgba(42, 26, 45, 0.28)';
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -452,11 +556,11 @@
   function drawBattery() {
     if (!battery || battery.charging || battery.level >= 0.2) return;
     const head = headPoint();
-    const u = Math.max(2, Math.round(settings.scale * 0.9));
+    const u = Math.max(2, Math.round(unit() * 0.9));
     const w = u * 6;
     const h = u * 3;
     const x = Math.round(head.x - w / 2);
-    const y = Math.round(head.y - h - settings.scale * (pomodoro.running ? 14 : 3));
+    const y = Math.round(head.y - h - unit() * (pomodoro.running ? 14 : 3));
 
     ctx.save();
     ctx.fillStyle = '#2a1a2d';
@@ -485,6 +589,7 @@
       Math.round(rect.left * 2), Math.round(rect.top * 2),
       Math.round(rect.width * 2), Math.round(rect.height * 2),
       body.facing, settings.flavor,
+      look.dx, look.dy, isBlinking() ? 'b' : '-',
       Math.round(sway * 60),
       // particle positions change every tick, so the count alone is not
       // enough - repaint while anything is in flight
@@ -497,8 +602,9 @@
     lastDrawKey = key;
 
     ctx.clearRect(0, 0, bounds.width, bounds.height);
+    drawShadow();
     drawPip();
-    Particles.draw(ctx, particleList, settings.scale);
+    Particles.draw(ctx, particleList, unit());
     drawRing();
     drawBattery();
     drawBubble();
@@ -539,7 +645,7 @@
     // reached - both of which used to leave Pip trotting on the spot.
     let dir = walkDir;
     if (body.grounded && !drag && !body.climbing) {
-      const walk = Physics.resolveWalk(body, walkDir, gotoX, wb, settings.scale * 4);
+      const walk = Physics.resolveWalk(body, walkDir, gotoX, wb, unit() * 4);
       dir = walk.dir;
       gotoX = walk.gotoX;
     }
@@ -570,7 +676,7 @@
       // flat and he has to pick himself up again.
       if (events.speed > 900) {
         setLocalClip('getup', now);
-        Particles.spawn(particleList, 'star', body.x, body.y - settings.scale * 18, 3);
+        Particles.spawn(particleList, 'star', body.x, body.y - unit() * 18, 3);
       } else if (events.speed > 260) {
         setLocalClip('land', now);
       }
@@ -696,7 +802,13 @@
       localClip !== null || particleList.length > 0 || bubble !== null ||
       sway !== 0 || Math.abs(body.squash - 1) > 0.01;
     if (active) return ACTIVE_MS;
-    return Math.min(MAX_IDLE_MS, Math.max(ACTIVE_MS, msToNextFrame(now)));
+    let next = msToNextFrame(now);
+    // a blink starting or ending is a change of picture too
+    if (hasLiveEyes(currentFrame)) {
+      const edge = now < blinkUntil ? blinkUntil : blinkAt;
+      if (edge > now) next = Math.min(next, edge - now);
+    }
+    return Math.min(MAX_IDLE_MS, Math.max(ACTIVE_MS, next));
   }
 
   /** Is the pointer close enough that its position changes what we draw? */
@@ -792,7 +904,7 @@
     if (now - hoverSince >= PET_MS) {
       petSent = true;
       notify('pip:pet', {});
-      Particles.spawn(particleList, 'heart', body.x, body.y - settings.scale * 8, 3);
+      Particles.spawn(particleList, 'heart', body.x, body.y - unit() * 8, 3);
     }
   }
 
@@ -824,7 +936,7 @@
       if (Math.hypot(x - c.x, y - c.y) < STARTLE_RANGE) {
         lastStartleAt = t;
         notify('pip:startle', {});
-        Particles.spawn(particleList, 'sweat', body.x, body.y - settings.scale * 6, 2,
+        Particles.spawn(particleList, 'sweat', body.x, body.y - unit() * 6, 2,
           { dir: -body.facing });
       }
     }
@@ -904,10 +1016,12 @@
    * ---------------------------------------------------------------- */
 
   bridge.on('pip:settings', (s) => {
-    const flavourChanged = s.flavor !== settings.flavor;
-    const scaleChanged = s.scale !== settings.scale;
+    const typeChanged = s.flavor !== settings.flavor;
     settings = Object.assign({}, settings, s);
-    if (flavourChanged || scaleChanged || !Object.keys(frameCache).length) prerender();
+    // Frames are cached at the art's own size, so only a new type - not a new
+    // scale or a new monitor - means composing them again.
+    if (typeChanged || !palette) prerender();
+    lastDrawKey = '';
     wake();
   });
 
@@ -915,9 +1029,7 @@
     bounds = Object.assign({}, bounds, b);
     const before = dpr;
     resizeCanvas();
-    // Frames bake scale * devicePixelRatio, so moving to a 200% monitor (or
-    // changing scaling live) means the cache has to be rebuilt.
-    if (dpr !== before) prerender();
+    if (dpr !== before) lastDrawKey = '';
     Physics.clamp(body, worldBounds());
     wake();
   });
@@ -934,7 +1046,7 @@
     if (typeof s.walkSpeed === 'number') walkSpeed = s.walkSpeed;
     sleeping = s.state === 'sleeping';
     if (sleeping && !particleList.some((p) => p.kind === 'zzz')) {
-      Particles.spawn(particleList, 'zzz', body.x, body.y - settings.scale * 10, 3);
+      Particles.spawn(particleList, 'zzz', body.x, body.y - unit() * 10, 3);
     }
     wake();
   });
@@ -961,7 +1073,7 @@
   bridge.on('pip:particles', (payload) => {
     if (!payload || !payload.kind) return;
     const head = payload.kind === 'zzz' || payload.kind === 'star';
-    const y = body.y - settings.scale * (head ? 26 : 14);
+    const y = body.y - unit() * (head ? 26 : 14);
     Particles.spawn(particleList, payload.kind, body.x, y, payload.count || 3,
       { dir: -body.facing });
     lastDrawKey = '';
@@ -1035,11 +1147,16 @@
     setFlavor: (f) => { settings.flavor = f; prerender(); },
     playAll: function () {
       const errors = [];
-      for (const flavor of Palettes.FLAVOR_NAMES) {
+      // Every clip, every frame, looking every way and blinking, for the
+      // types that cover each kind of decoration; the idle pose for the rest.
+      const full = Pips.SMOKE_FULL || Pips.IDS;
+      for (const typeId of Pips.IDS) {
+        const flavor = typeId;
         try {
           settings.flavor = flavor;
           prerender();
-          for (const name of Animations.CLIP_NAMES) {
+          const clips = full.indexOf(typeId) !== -1 ? Animations.CLIP_NAMES : ['idle'];
+          for (const name of clips) {
             const c = Animations.CLIPS[name];
             let t = 0;
             for (let i = 0; i < c.frames.length; i++) {
@@ -1047,13 +1164,21 @@
               if (!res.frame || !Sprites.FRAMES[res.frame]) {
                 errors.push(flavor + '/' + name + ': missing frame ' + res.frame);
               }
-              if (!frameCache[res.frame]) {
-                errors.push(flavor + '/' + name + ': frame not pre-rendered: ' + res.frame);
-              }
-              // Actually paint it, so a broken palette key or a bad draw throws here.
+              // Actually compose and paint it, so a bad trait anchor, a broken
+              // palette key or a bad draw throws here.
               currentFrame = res.frame;
+              for (const lk of [{ dx: 0, dy: 0 }, { dx: -1, dy: -1 }, { dx: 1, dy: 1 }]) {
+                look = lk;
+                if (!getFrame(res.frame)) errors.push(flavor + '/' + name + ': could not compose ' + res.frame);
+              }
+              blinkUntil = lastTick + 1000;
               lastDrawKey = '';
               drawPip();
+              blinkUntil = 0;
+              look = { dx: 0, dy: 0 };
+              if (settings.nightcap !== true && Sprites.FRAMES[res.frame + '_cap']) {
+                if (!getFrame(res.frame + '_cap')) errors.push(flavor + ': could not compose ' + res.frame + '_cap');
+              }
               t += c.durations[i];
             }
           }
@@ -1062,7 +1187,7 @@
             Particles.spawn(particleList, kind, body.x, body.y, 3);
           }
           particleList = Particles.update(particleList, 0.05);
-          Particles.draw(ctx, particleList, settings.scale);
+          Particles.draw(ctx, particleList, unit());
           particleList = [];
 
           const b = Bubbles.create('Smoke test, ' + flavor + '!', Date.now());
