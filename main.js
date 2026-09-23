@@ -28,6 +28,10 @@ const clicks = require('./src/main/clicks.js');
 const Lines = require('./src/renderer/lines.js');
 const Bubbles = require('./src/renderer/bubbles.js');
 const Animations = require('./src/renderer/animations.js');
+const Pips = require('./src/renderer/pips.js');
+const rhythm = require('./src/main/rhythm.js');
+const apps = require('./src/main/apps.js');
+const fgwatch = require('./src/main/fgwatch.js');
 
 /* ------------------------------------------------------------------ *
  * Flags and paths
@@ -106,7 +110,25 @@ function runApp(store) {
   /** Reaction lengths, before the dev time scale. */
   const REACTION_MS = {
     happy: 1800, heart: 2400, eat: 2000, surprise: 1500,
-    sulk: 3000, laugh: 2000, blush: 2000, dizzy: 2600
+    sulk: 3000, laugh: 2000, blush: 2000, dizzy: 2600,
+    giggle: 1600, boop: 900, queasy: 2800, bonk: 1400, angry: 1900,
+    sad: 2900, scared: 900, proud: 1700, confused: 1950, excited: 1400
+  };
+
+  /** Each temperament's favourite thing to do, played more often. */
+  const TEMPERAMENT_SIGNATURE = {
+    cheerful: 'bounce', sleepy: 'loaf', zesty: 'zoomies',
+    dramatic: 'twirl', chill: 'whistle', curious: 'sniff'
+  };
+
+  /** What Pip does to keep you company, by what is in front of you. */
+  const CONTEXT_CLIPS = {
+    code: 'code', terminal: 'code', video: 'popcorn', music: 'headbop',
+    design: 'paint', writing: 'scribble', email: 'mail', game: 'gamepad'
+  };
+  const CONTEXT_LINES = {
+    code: 'app_code', terminal: 'app_code', video: 'app_video', music: 'app_music',
+    design: 'app_design', writing: 'app_writing', email: 'app_email', game: 'app_game'
   };
   const CELEBRATE_MS = 6000;
   /** Idle behaviours are picked on this cadence, scaled by activity level. */
@@ -145,14 +167,28 @@ function runApp(store) {
     lastChaseSendAt: 0,
     cursorX: 0,
     pipX: 0,
-    onboardingStep: -1
+    onboardingStep: -1,
+    shaken: false,           // shaken about while carried: queasy, not dizzy
+    rhythm: rhythm.createState(),
+    cursorMoved: false,
+    lastCursorKey: '',
+    app: { category: 'other', fullscreen: false, since: 0 },
+    appSwitches: [],
+    fsHidden: false,         // hidden because a fullscreen app is in front
+    meeting: false,          // a meeting app is in front: no bubbles
+    nextContextAt: 0,
+    saidContext: {},
+    zoomies: null
   };
+
+  let appWatcher = null;
 
   let cursorTimer = null;
   let brainTimer = null;
   let idleTimer = null;
   let onboardingTimer = null;
   let singleClickTimer = null;
+  let rhythmTimer = null;
 
   /** The clock everything reads, so the debug panel can push it forward. */
   const now = () => Date.now() + world.clockOffset;
@@ -220,6 +256,7 @@ function runApp(store) {
       activityLevel: store.get('activityLevel'),
       quiet: now() < store.get('quietUntil'),
       nightcap: world.nightcap,
+      effects: store.get('effects'),
       dev: IS_DEV
     });
   }
@@ -235,6 +272,8 @@ function runApp(store) {
   function say(situation, essential) {
     const t = now();
     if (t < store.get('quietUntil')) return;
+    // Nobody wants a speech bubble popping up on a shared screen.
+    if (world.meeting) return;
     if (!essential && t - world.lastBubbleAt < scaled(Bubbles.CHATTER_COOLDOWN_MS)) return;
 
     const text = Lines.pick(situation, {
@@ -263,9 +302,11 @@ function runApp(store) {
    * @param {object} [move]    {walkDir, walkSpeed} to react while moving
    */
   function react(clip, ms, move) {
+    // Not scaled by dev mode: this is how long an animation plays, not a
+    // work timer, and a 30ms reaction is no reaction at all.
     world.reaction = {
       clip: clip,
-      until: now() + scaled(ms || REACTION_MS[clip] || 1800),
+      until: now() + (ms || REACTION_MS[clip] || 1800),
       walkDir: move ? move.walkDir : 0,
       walkSpeed: move ? move.walkSpeed : 0
     };
@@ -277,15 +318,92 @@ function runApp(store) {
     pushSettings();
   }
 
-  /** Weighted by mood: a cheerful Pip dances, a glum one reads and naps. */
+  /**
+   * Weighted by mood and by the Pip's temperament: a cheerful Pip dances, a
+   * glum one reads and naps, and every type has a favourite it does more.
+   */
   function pickBehavior() {
     const m = store.get('mood');
-    const lively = ['dance', 'juggle', 'wave', 'chase', 'stretch'];
-    const quietOnes = ['sit', 'read', 'nap', 'yawn'];
-    const always = ['stretch', 'yawn', 'sit', 'trip', 'wave'];
+    const hour = new Date(now()).getHours();
+    const type = Pips.get(store.get('flavor'));
+    const lively = ['dance', 'juggle', 'wave', 'chase', 'stretch', 'bounce', 'hop', 'whistle', 'lookatyou'];
+    const quietOnes = ['sit', 'read', 'nap', 'yawn', 'loaf'];
+    const always = ['stretch', 'yawn', 'sit', 'trip', 'wave', 'sneeze', 'scratch', 'shake', 'roll', 'sniff', 'lookatyou'];
     let pool = always.concat(m >= 60 ? lively : [], m < 40 ? quietOnes : []);
-    if (m >= 40 && m < 60) pool = pool.concat(['chase', 'read']);
+    if (m >= 40 && m < 60) pool = pool.concat(['chase', 'read', 'whistle']);
+    if (m < 25) pool.push('sad');
+    if (hour >= 21 || hour < 5) pool.push('stargaze', 'stargaze');
+    const signature = TEMPERAMENT_SIGNATURE[type.temperament];
+    if (signature) pool.push(signature, signature, signature);
+    if (type.id === 'bubblegum') pool.push('gum', 'gum', 'gum');
     return pool[Math.floor(rng() * pool.length)] || 'stretch';
+  }
+
+  /** How long a behaviour runs: its whole animation, never cut short. */
+  function behaviorLength(clip) {
+    return Math.max(1500, Animations.clipDuration(clip) || BEHAVIOR_LENGTH_MS);
+  }
+
+  /** Zesty types get the zoomies: flat out to one side, then the other. */
+  function startZoomies(t) {
+    world.zoomies = { until: t + 5600, nextAt: 0, side: rng() < 0.5 ? 0 : 1 };
+  }
+
+  function updateZoomies(t) {
+    const z = world.zoomies;
+    if (!z) return;
+    if (t >= z.until || world.held || world.asleep || !overlay || overlay.isDestroyed()) {
+      world.zoomies = null;
+      send('pip:goto', { x: null });
+      return;
+    }
+    if (t < z.nextAt) return;
+    const width = overlay.getBounds().width;
+    z.side = 1 - z.side;
+    send('pip:goto', { x: width * (z.side ? 0.82 : 0.18), speed: 250 });
+    z.nextAt = t + 1400;
+  }
+
+  /**
+   * Keeping you company. While you type, Pip types along on his own tiny
+   * laptop (in a hard hat if it is code); with a video in front he gets the
+   * popcorn out; with music, headphones. It is a behaviour like any other -
+   * it runs for a while and ends, so he never stops wandering for good - and
+   * it ends early the moment you stop doing the thing.
+   */
+  function wantedContext(t) {
+    const cat = world.app.category;
+    const typingFor = world.rhythm.mode === 'typing' ? rhythm.heldFor(world.rhythm, t) : 0;
+    if (typingFor >= 12000) {
+      return { clip: cat === 'code' || cat === 'terminal' ? 'code' : 'type_along', key: 'typing' };
+    }
+    const clip = CONTEXT_CLIPS[cat];
+    if (clip && clip !== 'code' && t - world.app.since >= 8000) return { clip: clip, key: cat };
+    return null;
+  }
+
+  function updateContext(t) {
+    const cur = world.behavior && world.behavior.context ? world.behavior : null;
+    const want = wantedContext(t);
+    if (cur) {
+      if (!want || want.clip !== cur.clip) {
+        world.behavior = null;
+        world.nextContextAt = t + 20000 + rng() * 20000;
+      }
+      return;
+    }
+    if (!want || t < world.nextContextAt) return;
+    if (world.asleep || world.held || world.reaction || world.zoomies || store.get('hidden')) return;
+    if (world.behavior && t < world.behavior.until) return;
+    const length = 20000 + rng() * 20000;
+    world.behavior = { clip: want.clip, until: t + length, context: true };
+    world.nextContextAt = t + length + 30000 + rng() * 30000;
+    // once a session per kind of thing, and only as passing chatter
+    if (!world.saidContext[want.key]) {
+      world.saidContext[want.key] = true;
+      if (want.key === 'typing') say('typing_company');
+      else say(CONTEXT_LINES[want.key]);
+    }
   }
 
   function maybeStartBehavior() {
@@ -310,7 +428,8 @@ function runApp(store) {
     // 20-90s the interval says rather than some multiple of it.
     if (roll < 0.9) {
       const clip = pickBehavior();
-      world.behavior = { clip: clip, until: t + scaled(BEHAVIOR_LENGTH_MS) };
+      if (clip === 'zoomies') { startZoomies(t); return; }
+      world.behavior = { clip: clip, until: t + behaviorLength(clip) };
       if (clip === 'nap') particles('zzz', 3);
     } else {
       // A passing remark, coloured by how Pip is feeling. The chatter
@@ -408,6 +527,10 @@ function runApp(store) {
       if (res.finishedPhase === 'work') {
         const today = store.get('today');
         store.set({ today: Object.assign({}, today, { pomodoros: today.pomodoros + 1 }) });
+        // Four in a day is a proper morning's work: Pip is very proud of you.
+        if (today.pomodoros + 1 === 4) {
+          setTimeout(() => { if (!quitting) react('proud'); }, scaled(CELEBRATE_MS) + 200);
+        }
         world.celebrateUntil = now() + scaled(CELEBRATE_MS);
         particles('confetti', 18);
         say('pomodoro_done', true);
@@ -517,7 +640,7 @@ function runApp(store) {
   function onWakeUp() {
     logger.info('you came back');
     callPip();
-    react('happy');
+    react('excited');
     say('welcome_back', true);
     particles('sparkle', 5);
   }
@@ -532,7 +655,7 @@ function runApp(store) {
     const key = reminders.localDateKey(t);
     if (store.get('lastGoodMorning') === key) return;
     store.set({ lastGoodMorning: key });
-    world.behavior = { clip: 'stretch', until: t + scaled(BEHAVIOR_LENGTH_MS) };
+    world.behavior = { clip: 'stretch', until: t + behaviorLength('stretch') };
     if (new Date(t).getHours() < 12) say('good_morning', true);
   }
 
@@ -876,10 +999,11 @@ function runApp(store) {
 
   function quit() {
     quitting = true;
-    for (const t of [cursorTimer, brainTimer, idleTimer, onboardingTimer]) {
+    for (const t of [cursorTimer, brainTimer, idleTimer, onboardingTimer, rhythmTimer]) {
       if (t) clearInterval(t);
     }
     if (singleClickTimer) clearTimeout(singleClickTimer);
+    stopAppWatcher();
     persistStreak();
     if (tray && !tray.isDestroyed()) tray.destroy();
     app.quit();
@@ -915,6 +1039,8 @@ function runApp(store) {
     const x = point.x - b.x;
     const y = point.y - b.y;
     world.cursorX = x;
+    const key = point.x + ',' + point.y;
+    if (key !== world.lastCursorKey) { world.lastCursorKey = key; world.cursorMoved = true; }
     send('pip:cursor', {
       x: x, y: y,
       inside: x >= 0 && y >= 0 && x < b.width && y < b.height
@@ -932,7 +1058,9 @@ function runApp(store) {
       updateChase(t);
       if (world.reaction && t >= world.reaction.until) world.reaction = null;
       if (world.behavior && t >= world.behavior.until) world.behavior = null;
-      if (!world.asleep && !world.held) maybeStartBehavior();
+      updateZoomies(t);
+      if (!world.asleep && !world.held) updateContext(t);
+      if (!world.asleep && !world.held && !world.zoomies) maybeStartBehavior();
       tickPomodoro();
 
       const result = brain.decide({
@@ -949,13 +1077,14 @@ function runApp(store) {
         behavior: world.behavior,
         wander: world.wander,
         quiet: t < s.quietUntil,
-        hidden: s.hidden,
+        hidden: s.hidden || world.fsHidden,
         mood: mood.decay(s.mood, s.moodUpdatedAt, t),
         hour: new Date(t).getHours(),
         activityLevel: s.activityLevel,
         climbing: world.climbing,
         onBreak: store.get('pomodoro').phase === 'break' ||
-                 store.get('pomodoro').phase === 'longBreak'
+                 store.get('pomodoro').phase === 'longBreak',
+        onWork: store.get('pomodoro').phase === 'work'
       });
       world.wander = result.wander;
 
@@ -979,6 +1108,85 @@ function runApp(store) {
   function startIdlePolling() {
     idleTimer = setInterval(pollIdle, 10000);
     pollIdle();
+    rhythmTimer = setInterval(pollRhythm, 1000);
+  }
+
+  /** Once a second: typing, mousing, reading or away? (see rhythm.js) */
+  function pollRhythm() {
+    let idle;
+    try { idle = powerMonitor.getSystemIdleTime(); } catch (err) { return; }
+    world.rhythm = rhythm.sample(world.rhythm, now(), idle, world.cursorMoved);
+    world.cursorMoved = false;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * App awareness
+   * ---------------------------------------------------------------- */
+
+  function startAppWatcher() {
+    if (appWatcher || !store.get('appAware') || IS_SMOKE || SHOTS_DIR) return;
+    appWatcher = fgwatch.start({
+      titles: !!store.get('appTitles'),
+      logger: logger,
+      onLine: onForeground,
+      onStatus: (status, detail) => {
+        if (status === 'unavailable') logger.info('app awareness unavailable: ' + (detail || ''));
+      }
+    });
+  }
+
+  function stopAppWatcher() {
+    if (appWatcher) { appWatcher.stop(); appWatcher = null; }
+    world.app = { category: 'other', fullscreen: false, since: now() };
+    world.meeting = false;
+    applyFullscreen(false);
+  }
+
+  function restartAppWatcher() {
+    stopAppWatcher();
+    startAppWatcher();
+  }
+
+  /** The foreground window changed. Only its category is kept. */
+  function onForeground(line) {
+    const info = apps.parseLine(line);
+    if (!info) return;
+    const t = now();
+    const category = apps.categorize(info, { titles: !!store.get('appTitles') });
+    if (category !== world.app.category) {
+      world.appSwitches = world.appSwitches.filter((at) => t - at < 60000).concat([t]);
+      // Eight changes of app in a minute: Pip tries to keep up and juggles.
+      if (world.appSwitches.length >= 8 && !world.reaction && !world.held) {
+        world.appSwitches = [];
+        // trying to keep up: juggling it all, or completely lost
+        if (rng() < 0.5) react('juggle', Animations.clipDuration('juggle'));
+        else react('confused');
+        say('tab_juggling');
+      }
+    }
+    world.app = {
+      category: category,
+      fullscreen: apps.isFullscreen(info),
+      since: category === world.app.category ? world.app.since : t
+    };
+    world.meeting = category === 'meeting' && !!store.get('quietMeetings');
+    applyFullscreen(world.app.fullscreen && !!store.get('hideFullscreen'));
+  }
+
+  /** Step out of the way of a fullscreen game, video or slideshow. */
+  function applyFullscreen(hide) {
+    if (!overlay || overlay.isDestroyed()) { world.fsHidden = hide; return; }
+    if (hide && !world.fsHidden) {
+      world.fsHidden = true;
+      overlay.hide();
+      logger.info('fullscreen app in front: Pip steps aside');
+    } else if (!hide && world.fsHidden) {
+      world.fsHidden = false;
+      if (!store.get('hidden')) {
+        overlay.showInactive();
+        overlay.setAlwaysOnTop(true, 'floating');
+      }
+    }
   }
 
   /* ---------------------------------------------------------------- *
@@ -1037,14 +1245,66 @@ function runApp(store) {
     ipcMain.on('pip:grabbed', () => {
       world.held = true;
       world.asleep = false;
+      world.shaken = false;
+      world.zoomies = null;
+    });
+
+    /*
+     * Things the renderer noticed the pointer doing. The renderer only
+     * reports; whether and how Pip reacts is decided here, with his mood,
+     * quiet mode and whatever he is already doing in mind.
+     */
+    ipcMain.on('pip:gesture', (_e, payload) => {
+      const kind = payload && payload.kind;
+      const t = now();
+      if (kind === 'shake') { world.shaken = true; return; }
+      if (world.held || world.asleep) return;
+      const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), t));
+      switch (kind) {
+        case 'tickle':
+          react('giggle');
+          particles('heart', 2);
+          say('tickle');
+          bumpMood('pet');
+          break;
+        case 'pounce': {
+          // Only a Pip with nothing better to do, and in the mood, gives chase.
+          if (t < store.get('quietUntil') || world.reaction || band === 'low') return;
+          if (world.behavior && t < world.behavior.until) return;
+          const ready = Animations.clipDuration('pounce_ready');
+          react('pounce_ready', ready + Animations.clipDuration('pounce'));
+          send('pip:action', { kind: 'pounce', x: payload.x, delay: ready });
+          say('pounce');
+          break;
+        }
+        case 'circle':
+          react('dizzy');
+          particles('star', 3);
+          say('dizzy');
+          break;
+        case 'bonk':
+          react('bonk');
+          say('bonk');
+          break;
+        default:
+          logger.warn('unknown gesture: ' + kind);
+      }
     });
 
     ipcMain.on('pip:dropped', (_e, payload) => {
       if (payload && typeof payload.x === 'number') world.pipX = payload.x;
       world.held = false;
-      react('dizzy');
-      particles('star', 4);
-      say('dizzy');
+      if (world.shaken) {
+        // shaken about on the way: not dizzy, positively green
+        react('queasy');
+        particles('sweat', 2);
+        say('queasy');
+      } else {
+        react('dizzy');
+        particles('star', 4);
+        say('dizzy');
+      }
+      world.shaken = false;
       // Follow the cursor to whichever display Pip was let go over.
       try {
         const point = screen.getCursorScreenPoint();
@@ -1075,6 +1335,12 @@ function runApp(store) {
 
       if (res.pattern === 'rapid') {
         if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
+        // A glum Pip stands his ground and stamps; a cheerful one just huffs off.
+        if (mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now())) === 'low') {
+          react('angry', Animations.clipDuration('angry'));
+          say('annoyed', true);
+          return;
+        }
         // Puff up and scoot away from the pointer. The movement has to ride on
         // the reaction itself - a stationary reaction outlasts any wander we
         // could set here and would swallow the scoot entirely.
@@ -1097,9 +1363,18 @@ function runApp(store) {
         return;
       }
 
+      const onFace = !!(payload && payload.face);
       defer(clicks.DOUBLE_MS + 40, () => {
         // A thirsty Pip takes a click as "yes, I drank some".
         if (world.thirsty) { doAction('water'); return; }
+        if (onFace) {
+          // right on the nose
+          react('boop');
+          particles('heart', 1);
+          say('boop');
+          bumpMood('pet');
+          return;
+        }
         const band = mood.band(mood.decay(store.get('mood'), store.get('moodUpdatedAt'), now()));
         react(band === 'high' ? 'laugh' : 'happy');
         particles('heart', 2);
@@ -1116,7 +1391,7 @@ function runApp(store) {
     });
 
     ipcMain.on('pip:startle', () => {
-      react('surprise');
+      react(rng() < 0.35 ? 'scared' : 'surprise');
       say('startle');
     });
 
@@ -1151,6 +1426,8 @@ function runApp(store) {
       const patch = (payload && payload.patch) || {};
       store.set(patch);
       if ('launchAtLogin' in patch) applyLoginItem();
+      if ('appAware' in patch || 'appTitles' in patch) restartAppWatcher();
+      if ('hideFullscreen' in patch && !patch.hideFullscreen) applyFullscreen(false);
       sendSettings();
       refreshMenu();
       pushSettings();
@@ -1363,6 +1640,7 @@ function runApp(store) {
     startCursorPolling();
     startBrain();
     startIdlePolling();
+    startAppWatcher();
 
     if (IS_SMOKE) {
       setTimeout(() => {

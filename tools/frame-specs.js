@@ -370,6 +370,228 @@ specs.sleeping_0 = { body: CURL, legs: { mode: 'none' }, face: { eyes: 'closed',
 specs.sleeping_1 = { body: { ...CURL, cy: 46, w: 18.1, h: 14.6 }, legs: { mode: 'none' }, face: { eyes: 'closed', mouth: 'smile', dx: -3 } };
 specs.sleeping_2 = { body: { ...CURL, cy: 46.6, w: 18.8, h: 14 }, legs: { mode: 'none' }, face: { eyes: 'closed', mouth: 'o', dx: -3 } };
 
+/* ================================================================== *
+ * Pip 2.0 - new poses
+ * ================================================================== */
+
+/* ---- turn: a front-facing beat when he changes direction ---------- */
+
+specs.turn_0 = { view: 'front', body: { cy: 41, h: 15 } };
+
+/* ---- hop: crouch, launch, tuck, land ------------------------------ */
+
+specs.hop_0 = { body: { ...REST, cy: 44, w: 23.6, h: 12.6 }, legs: { spread: 2 }, face: { eyes: 'squint', mouth: 'flat' } };
+specs.hop_1 = { body: { ...REST, cy: 36, w: 20, h: 16.4 }, legs: { lift: [4, 4, 4, 4], dx: [-2, 2, -2, 2] }, face: { eyes: 'open', mouth: 'o' } };
+specs.hop_2 = { body: { ...REST, cy: 32, w: 21, h: 15.4 }, legs: { lift: [9, 9, 9, 9], dx: [1, -1, 1, -1] }, face: { eyes: 'happy', mouth: 'grin' } };
+
+/* ---- sneeze: the twitch, the build, the ACHOO --------------------- */
+
+specs.sneeze_0 = { body: { ...REST, cy: 40.4, tilt: -0.06 }, face: { eyes: 'half', mouth: 'o', dy: -1 } };
+specs.sneeze_1 = { body: { ...REST, cy: 39, w: 20.6, h: 16.2, tilt: -0.12 }, face: { eyes: 'squint', mouth: 'open', dy: -1 } };
+specs.sneeze_2 = { body: { ...REST, cx: 33.5, cy: 43, w: 23.4, h: 13.2, tilt: 0.14 }, legs: { spread: 1 }, face: { eyes: 'squint', mouth: 'grin' } };
+specs.sneeze_3 = { body: { ...REST, cy: 41.2 }, face: { eyes: 'half', mouth: 'wavy' } };
+
+/* ---- scratch: sitting, a back foot at an itch --------------------- */
+
+specs.scratch_0 = { body: SIT, legs: { reach: [{ dx: 8, dy: 3 }, null, { hx: 1, up: 2, dx: 10, dy: -10, over: true, r: 3.2 }, null], dx: [0, 2, 0, 4] }, face: { eyes: 'happy', mouth: 'cat', dy: -1 } };
+specs.scratch_1 = { body: { ...SIT, cy: 43.4 }, legs: { reach: [{ dx: 8, dy: 3 }, null, { hx: 1, up: 2, dx: 11, dy: -8, over: true, r: 3.2 }, null], dx: [0, 2, 0, 4] }, face: { eyes: 'closed', mouth: 'cat', dy: -1 } };
+
+/* ---- shake: the wet-dog shake-off ---------------------------------- */
+
+specs.shake_0 = { body: { ...REST, cx: 31, w: 21.6, tilt: -0.16 }, legs: { spread: 1 }, face: { eyes: 'squint', mouth: 'wavy', dx: -1 } };
+specs.shake_1 = { body: { ...REST, cx: 33, w: 21.6, tilt: 0.16 }, legs: { spread: 1 }, face: { eyes: 'squint', mouth: 'wavy', dx: 1 } };
+specs.shake_2 = { body: { ...REST, cy: 40, h: 15.4 }, face: { eyes: 'happy', mouth: 'cat' } };
+
+/* ---- roll: over on his back, paws in the air ----------------------- */
+
+specs.roll_0 = {
+  body: { cx: 32, cy: 50, w: 22.4, h: 11.2, dip: 0.6 },
+  legs: { up: true, reach: [{ dx: -3, dy: -8 }, { dx: 2, dy: -9 }, { dx: -4, dy: -7 }, { dx: 3, dy: -8 }] },
+  face: { eyes: 'happy', mouth: 'grin', dy: 2 },
+  noTrait: true
+};
+specs.roll_1 = {
+  body: { cx: 32, cy: 50.4, w: 22.8, h: 10.8, dip: 0.6, tilt: 0.04 },
+  legs: { up: true, reach: [{ dx: -1, dy: -9 }, { dx: 4, dy: -7 }, { dx: -2, dy: -8 }, { dx: 5, dy: -9 }] },
+  face: { eyes: 'happy', mouth: 'open', dy: 2 },
+  noTrait: true
+};
+
+/* ---- sniff: nose down, snuffling at the floor ---------------------- */
+
+specs.sniff_0 = { body: { ...REST, cx: 33, cy: 42.4, tilt: 0.2 }, legs: { dx: [0, -1, 0, -1] }, face: { eyes: 'half', mouth: 'o', dy: 2 } };
+specs.sniff_1 = { body: { ...REST, cx: 33.4, cy: 43, tilt: 0.24 }, legs: { lift: [0, 1, 1, 0] }, face: { eyes: 'closed', mouth: 'o', dy: 2 } };
+specs.sniff_2 = { body: { ...REST, cy: 40.6, tilt: -0.04 }, face: { eyes: 'dot', mouth: 'smile', dy: -1 } };
+
+/* ---- loaf: legs tucked away, perfectly content --------------------- */
+
+specs.loaf_0 = { body: { cx: 32, cy: 47.2, w: 21.6, h: 13.2, dip: 2.6, round: 2.5 }, legs: { mode: 'none' }, face: { eyes: 'half', mouth: 'cat', dy: 1 } };
+specs.loaf_1 = { body: { cx: 32, cy: 47, w: 21.4, h: 13.4, dip: 2.6, round: 2.5 }, legs: { mode: 'none' }, face: { eyes: 'closed', mouth: 'cat', dy: 1 } };
+
+/* ---- bounce: boing, boing, boing ------------------------------------ */
+
+specs.bounce_0 = { body: { ...REST, cy: 44.4, w: 24.2, h: 12.4 }, legs: { spread: 2 }, face: { eyes: 'happy', mouth: 'cat' } };
+specs.bounce_1 = { body: { ...REST, cy: 38.4, w: 20.4, h: 16.2 }, legs: { lift: [2, 2, 2, 2] }, face: { eyes: 'open', mouth: 'grin' } };
+specs.bounce_2 = { body: { ...REST, cy: 34.6, w: 21.4, h: 15.2 }, legs: { lift: [6, 6, 6, 6] }, face: { eyes: 'happy', mouth: 'grin' } };
+
+/* ---- whistle: a tune and a tapping foot ----------------------------- */
+
+specs.whistle_0 = { body: { ...REST, cy: 40.8, tilt: -0.05 }, face: { eyes: 'happy', mouth: 'whistle' } };
+specs.whistle_1 = { body: { ...REST, cx: 32.6, cy: 40.6, tilt: -0.02 }, legs: { lift: [0, 0, 0, 2] }, face: { eyes: 'closed', mouth: 'whistle' } };
+
+/* ---- stargaze: sitting up, looking at the night sky ---------------- */
+
+specs.stargaze_0 = { body: { ...SIT, tilt: -0.34 }, legs: SIT_LEGS, face: { eyes: 'sparkle', mouth: 'o', dy: -3, dx: 1 } };
+specs.stargaze_1 = { body: { ...SIT, tilt: -0.34, cy: 43 }, legs: SIT_LEGS, face: { eyes: 'sparkle', mouth: 'smile', dy: -3, dx: 1 } };
+
+/* ---- lookatyou: turns round to face you, and waves ----------------- */
+
+specs.lookatyou_0 = { view: 'front', body: { cy: 41, h: 15 } };
+specs.lookatyou_1 = { view: 'front', body: { cy: 40.4, h: 15.4 }, face: { eyes: 'happy', mouth: 'cat' } };
+specs.lookatyou_2 = { view: 'front', body: { cy: 40.4, h: 15.4 }, legs: { reach: [null, null, null, { dx: 5, dy: -12, over: true, r: 3.2 }] }, face: { eyes: 'happy', mouth: 'grin' } };
+
+/* ---- twirl: a dramatic pirouette ------------------------------------ */
+
+specs.twirl_0 = { body: { ...REST, cy: 40.4, tilt: -0.1, h: 15.2 }, legs: { lift: [0, 2, 0, 3] }, face: { eyes: 'closed', mouth: 'o' } };
+specs.twirl_1 = { view: 'front', body: { cy: 39.6, h: 15.6 }, legs: { lift: [2, 2, 1, 1] }, face: { eyes: 'happy', mouth: 'o' } };
+specs.twirl_2 = { view: 'front', body: { cy: 39.4, h: 15.8 }, legs: { lift: [2, 2, 1, 1] }, face: { hidden: true } };
+specs.twirl_3 = { view: 'front', body: { cy: 40, h: 15.4 }, face: { eyes: 'sparkle', mouth: 'cat' } };
+
+/* ---- gum: bubblegum's signature, a bubble that gets out of hand ---- */
+
+specs.gum_0 = { body: REST, face: { eyes: 'open', mouth: 'o' }, props: [{ name: 'gum_s', r: 42, c: 45 }] };
+specs.gum_1 = { body: { ...REST, cy: 40.8 }, face: { eyes: 'dot', mouth: 'o' }, props: [{ name: 'gum_m', r: 40, c: 45 }] };
+specs.gum_2 = { body: { ...REST, cy: 40.6, h: 15 }, face: { eyes: 'wide', mouth: 'o', brows: 'raised' }, props: [{ name: 'gum_l', r: 37, c: 44 }] };
+specs.gum_3 = { body: { ...REST, cx: 31, cy: 41.4, lean: -1.2 }, face: { eyes: 'squint', mouth: 'open' } };
+
+/* ---- giggle: tickled, squirming ------------------------------------- */
+
+specs.giggle_0 = { body: { ...REST, cx: 31, cy: 41.6, w: 22.6, h: 14.2, tilt: -0.08 }, legs: { lift: [1, 0, 2, 0] }, face: { eyes: 'happy', mouth: 'grin', dx: -1 } };
+specs.giggle_1 = { body: { ...REST, cx: 33, cy: 40.8, w: 21.8, h: 15, tilt: 0.08 }, legs: { lift: [0, 2, 0, 1] }, face: { eyes: 'squint', mouth: 'open', dx: 1 } };
+specs.giggle_2 = { body: { ...REST, cy: 42, w: 23, h: 13.8 }, legs: { lift: [2, 2, 2, 2] }, face: { eyes: 'happy', mouth: 'grin' } };
+
+/* ---- boop: right on the nose ---------------------------------------- */
+
+specs.boop_0 = { body: { ...REST, cx: 30.6, cy: 40.6, w: 20.6, h: 15.6, lean: -1.5 }, face: { eyes: 'squint', mouth: 'o', dx: -1 } };
+specs.boop_1 = { body: { ...REST, cx: 33, w: 22.8, h: 14.4, lean: 1 }, face: { eyes: 'wide', mouth: 'cat' } };
+specs.boop_2 = { body: REST, face: { eyes: 'happy', mouth: 'cat' } };
+
+/* ---- angry: puffed up, a stomp, steam ------------------------------- */
+
+specs.angry_0 = { body: { ...REST, cy: 40, w: 23, h: 15.8 }, legs: { spread: 1 }, face: { eyes: 'open', brows: 'angry', mouth: 'frown' } };
+specs.angry_1 = { body: { ...REST, cy: 40.4, w: 23.2, h: 15.4 }, legs: { spread: 1, lift: [0, 0, 0, 4] }, face: { eyes: 'open', brows: 'angry', mouth: 'flat' } };
+specs.angry_2 = { body: { ...REST, cy: 40.8, w: 23.6, h: 15 }, legs: { spread: 1 }, face: { eyes: 'squint', brows: 'angry', mouth: 'frown' } };
+
+/* ---- sad: slumped, a wobbly lip, a tear ----------------------------- */
+
+specs.sad_0 = { body: { ...REST, cy: 42.4, w: 22.6, h: 13.8, tilt: 0.04 }, face: { eyes: 'teary', brows: 'worried', mouth: 'frown', dy: 1 } };
+specs.sad_1 = { body: { ...REST, cy: 42.8, w: 22.8, h: 13.4, tilt: 0.06 }, face: { eyes: 'teary', brows: 'worried', mouth: 'wavy', dy: 1 } };
+
+/* ---- scared: shrunk down, shivering ---------------------------------- */
+
+specs.scared_0 = { body: { ...REST, cx: 31.4, cy: 42, w: 20.2, h: 14 }, legs: { spread: -1 }, face: { eyes: 'wide', brows: 'worried', mouth: 'wavy' } };
+specs.scared_1 = { body: { ...REST, cx: 32.6, cy: 42, w: 20.2, h: 14 }, legs: { spread: -1 }, face: { eyes: 'wide', brows: 'worried', mouth: 'wavy' } };
+
+/* ---- proud: chest out, very pleased with himself --------------------- */
+
+specs.proud_0 = { body: { ...REST, cy: 40.2, h: 15.4, tilt: -0.12 }, face: { eyes: 'happy', mouth: 'cat', dy: -1 } };
+specs.proud_1 = { body: { ...REST, cy: 39.8, h: 15.6, tilt: -0.14 }, legs: { lift: [0, 0, 0, 1] }, face: { eyes: 'closed', mouth: 'smile', dy: -1 } };
+
+/* ---- confused: a head tilt one way, then the other ------------------- */
+
+specs.confused_0 = { body: { ...REST, cy: 40.8, tilt: -0.1 }, face: { eyes: 'dot', mouth: 'wavy', dy: -1 } };
+specs.confused_1 = { body: { ...REST, cy: 40.8, tilt: 0.1 }, face: { eyes: 'dot', mouth: 'pout' } };
+
+/* ---- excited: cannot keep still -------------------------------------- */
+
+specs.excited_0 = { body: { ...REST, cy: 44, w: 23.6, h: 12.6 }, legs: { spread: 2 }, face: { eyes: 'sparkle', mouth: 'grin' } };
+specs.excited_1 = { body: { ...REST, cy: 33, w: 20.6, h: 15.6 }, legs: { lift: [8, 8, 8, 8], dx: [-1, 1, -1, 1] }, face: { eyes: 'sparkle', mouth: 'grin', dy: -1 } };
+
+/* ---- queasy: shaken about too much ------------------------------------ */
+
+specs.queasy_0 = { body: { ...REST, cx: 31.2, cy: 41.6, tilt: -0.05 }, face: { eyes: 'swirl', brows: 'worried', mouth: 'wavy' } };
+specs.queasy_1 = { body: { ...REST, cx: 32.8, cy: 42, tilt: 0.05 }, face: { eyes: 'half', brows: 'worried', mouth: 'blep' } };
+
+/* ---- bonk: straight into the wall -------------------------------------- */
+
+specs.bonk_0 = { body: { ...REST, cx: 34, w: 19.8, h: 16, lean: -2 }, legs: { spread: -1 }, face: { eyes: 'squint', mouth: 'open' } };
+specs.bonk_1 = { body: { ...REST, cy: 42, w: 22.8, h: 13.8 }, face: { eyes: 'swirl', mouth: 'wavy' } };
+
+/* ---- pounce: the butt wiggle, then the leap --------------------------- */
+
+const CROUCH = { ...REST, cx: 31, cy: 45.6, w: 23.6, h: 12.4, tilt: 0.12 };
+specs.pounce_ready_0 = { body: CROUCH, legs: { dx: [-2, 3, -2, 4], spread: 1 }, face: { eyes: 'wide', mouth: 'flat', dy: 1 } };
+specs.pounce_ready_1 = { body: { ...CROUCH, cx: 30, tilt: 0.08 }, legs: { dx: [-2, 3, -2, 4], spread: 1 }, face: { eyes: 'wide', mouth: 'flat', dy: 1 } };
+specs.pounce_ready_2 = { body: { ...CROUCH, cx: 32, tilt: 0.15 }, legs: { dx: [-2, 3, -2, 4], spread: 1 }, face: { eyes: 'wide', mouth: 'cat', dy: 1 } };
+specs.pounce_0 = { body: { ...REST, cy: 38, w: 24.6, h: 13, lean: 3 }, legs: { dx: [-7, 4, -7, 5], lift: [2, 4, 2, 4] }, face: { eyes: 'wide', mouth: 'open' } };
+specs.pounce_1 = {
+  body: { ...REST, cy: 34, w: 24, h: 13.4, lean: 2 },
+  legs: { reach: [{ dx: -8, dy: 2 }, { dx: 10, dy: -2 }, { dx: -9, dy: 1 }, { dx: 11, dy: -1 }] },
+  face: { eyes: 'wide', mouth: 'grin' }
+};
+specs.pounce_2 = { body: { ...REST, cx: 33, cy: 45, w: 24, h: 12.6, tilt: 0.1 }, legs: { dx: [0, 5, 0, 6], spread: 1 }, face: { eyes: 'happy', mouth: 'cat' } };
+
+/* ---- work and play at the computer ----------------------------------- */
+
+const TYPE_A = { reach: [{ dx: 8, dy: 3 }, { hx: 0, up: 5, dx: 9, dy: 4, over: true, r: 3 }, { dx: 8, dy: 3 }, { hx: 3, up: 5, dx: 10, dy: 2, over: true, r: 3 }] };
+const TYPE_B = { reach: [{ dx: 8, dy: 3 }, { hx: 0, up: 5, dx: 9, dy: 2, over: true, r: 3 }, { dx: 8, dy: 3 }, { hx: 3, up: 5, dx: 10, dy: 4, over: true, r: 3 }] };
+const LAPTOP = { name: 'laptop', r: 51, c: 45, under: true };
+
+// typing along with you on a tiny laptop
+specs.type_0 = { body: SIT, legs: TYPE_A, face: { eyes: 'open', mouth: 'flat', dy: 1 }, props: [LAPTOP] };
+specs.type_1 = { body: { ...SIT, cy: 43.4 }, legs: TYPE_B, face: { eyes: 'open', mouth: 'cat', dy: 1 }, props: [LAPTOP] };
+// ...in a hard hat, because something is compiling
+specs.code_0 = { body: SIT, legs: TYPE_A, face: { eyes: 'open', mouth: 'flat', dy: 1 }, props: [LAPTOP, { name: 'hardhat', at: 'crown', dy: 3 }] };
+specs.code_1 = { body: { ...SIT, cy: 43.4 }, legs: TYPE_B, face: { eyes: 'open', mouth: 'pout', dy: 1 }, props: [LAPTOP, { name: 'hardhat', at: 'crown', dy: 3 }] };
+
+// focus mode: a sweatband and a determined face
+const BAND = [{ name: 'headband', r: 29, c: 0 }, { name: 'headband_tail', r: 31, c: 11 }];
+specs.focus_0 = { body: REST, face: { eyes: 'open', brows: 'angry', mouth: 'flat' }, props: BAND };
+specs.focus_1 = { body: { ...REST, cy: 40.8, h: 15 }, face: { eyes: 'open', brows: 'angry', mouth: 'pout' }, props: BAND };
+
+// watching a video with popcorn
+const POP_HOLD = { reach: [{ dx: 8, dy: 3 }, null, { dx: 8, dy: 3 }, { hx: 3, up: 6, dx: 6, dy: -2, over: true, r: 3 }] };
+specs.popcorn_0 = { body: SIT, legs: POP_HOLD, face: { eyes: 'open', mouth: 'smile', dy: -1 }, props: [{ name: 'popcorn', r: 45, c: 45 }] };
+specs.popcorn_1 = {
+  body: SIT,
+  legs: { reach: [{ dx: 8, dy: 3 }, null, { dx: 8, dy: 3 }, { hx: 3, up: 7, dx: 4, dy: -6, over: true, r: 3 }] },
+  face: { eyes: 'happy', mouth: 'munch', dy: -1 },
+  props: [{ name: 'popcorn', r: 46, c: 45 }]
+};
+
+// bopping along to music
+const PHONES = [{ name: 'headphones', at: 'crown', dy: 4 }];
+specs.headbop_0 = { body: { ...REST, cy: 40.4, tilt: -0.05 }, face: { eyes: 'closed', mouth: 'cat' }, props: PHONES };
+specs.headbop_1 = { body: { ...REST, cy: 42, w: 22.6, h: 14.2, tilt: 0.06 }, legs: { lift: [0, 0, 0, 2] }, face: { eyes: 'happy', mouth: 'smile' }, props: PHONES };
+
+// painting, beret on, while you design
+specs.paint_0 = {
+  body: SIT,
+  legs: { reach: [{ dx: 8, dy: 3 }, null, { dx: 8, dy: 3 }, { hx: 3, up: 6, dx: 8, dy: -6, over: true, r: 3 }] },
+  face: { eyes: 'open', mouth: 'cat', dy: -1 },
+  props: [{ name: 'beret', at: 'crown', dy: 3, dx: -2 }, { name: 'canvas', r: 42, c: 53 }, { name: 'brush', r: 34, c: 45 }]
+};
+specs.paint_1 = {
+  body: SIT,
+  legs: { reach: [{ dx: 8, dy: 3 }, null, { dx: 8, dy: 3 }, { hx: 3, up: 6, dx: 9, dy: -3, over: true, r: 3 }] },
+  face: { eyes: 'happy', mouth: 'cat', dy: -1 },
+  props: [{ name: 'beret', at: 'crown', dy: 3, dx: -2 }, { name: 'canvas', r: 42, c: 53 }, { name: 'brush', r: 37, c: 46 }]
+};
+
+// scribbling notes while you write
+const SCRIB = (dx, dy) => ({ reach: [{ dx: 8, dy: 3 }, null, { dx: 8, dy: 3 }, { hx: 3, up: 3, dx: dx, dy: dy, over: true, r: 3 }] });
+specs.scribble_0 = { body: SIT, legs: SCRIB(9, 2), face: { eyes: 'half', mouth: 'flat', dy: 1 }, props: [{ name: 'paper', r: 55, c: 43, under: true }, { name: 'pencil', r: 47, c: 50 }] };
+specs.scribble_1 = { body: { ...SIT, cy: 43.4 }, legs: SCRIB(10, 3), face: { eyes: 'half', mouth: 'pout', dy: 1 }, props: [{ name: 'paper', r: 55, c: 43, under: true }, { name: 'pencil', r: 48, c: 52 }] };
+
+// holding up the post
+const MAIL_HOLD = { reach: [null, null, null, { hx: 2, up: 5, dx: 8, dy: -2, over: true, r: 3 }] };
+specs.mail_0 = { body: REST, legs: MAIL_HOLD, face: { eyes: 'open', mouth: 'o' }, props: [{ name: 'envelope', r: 42, c: 50 }] };
+specs.mail_1 = { body: { ...REST, cy: 40.6 }, legs: MAIL_HOLD, face: { eyes: 'happy', mouth: 'cat' }, props: [{ name: 'envelope', r: 41, c: 50 }] };
+
+// playing along on a gamepad
+specs.gamepad_0 = { body: SIT, legs: SIT_HOLD, face: { eyes: 'wide', mouth: 'flat', dy: -1 }, props: [{ name: 'gamepad', r: 46, c: 43 }] };
+specs.gamepad_1 = { body: { ...SIT, cy: 43.4 }, legs: SIT_HOLD, face: { eyes: 'sparkle', mouth: 'grin', dy: -1 }, props: [{ name: 'gamepad', r: 45, c: 43 }] };
+
 /* ------------------------------------------------------------------ *
  * Nightcap variants
  *

@@ -28,6 +28,13 @@ const DEFAULTS = {
   notifications: true,
   launchAtLogin: true,
   compatibilityMode: false,
+  effects: 'full',            // full | reduced | off - rare Pips' special effects
+
+  // noticing what you are doing - all local, nothing stored or sent
+  appAware: true,             // react to the kind of app in front
+  appTitles: true,            // ...using window titles to tell sites apart
+  hideFullscreen: true,       // step aside for fullscreen games and videos
+  quietMeetings: true,        // no speech bubbles while a meeting app is in front
 
   // work habits, all in minutes
   pomodoroWork: 25,

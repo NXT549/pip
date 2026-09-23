@@ -249,7 +249,9 @@ function composeFrame(spec) {
       for (let c = col - 1; c <= col + 1; c++) if (colBot[c] !== undefined && colBot[c] > bottom) bottom = colBot[c];
       if (bottom < 0) continue;
       const reach = legs.reach[i];
-      const hip = { x: hx + (reach && reach.hx || 0), y: bottom - 2.5 - (reach && reach.up || 0) };
+      // belly-up (rolling over): the legs grow from the top of the bean
+      let hip = { x: hx + (reach && reach.hx || 0), y: bottom - 2.5 - (reach && reach.up || 0) };
+      if (legs.up && colTop[col] !== undefined) hip = { x: hip.x, y: colTop[col] + 2.5 };
       const sole = (far ? legs.floor - 1 : legs.floor) - legs.lift[i];
       let foot, planted;
       if (reach) {
@@ -359,13 +361,15 @@ function composeFrame(spec) {
   const liveEyes = [];
   if (!face.hidden) drawFace(g, near, nearEdge, body, view, face, liveEyes);
 
-  /* ---- paws raised in front of the body ---- */
-  for (const leg of overLegs) drawOverLeg(g, leg.mask, leg.far);
-
   /* ---- props ---- */
+  // Props marked `under` (a laptop on the floor) go down before the paws,
+  // so the paws rest on them; everything else is held or worn on top.
   let hat = false;
   const crown = crownPoint(colTop, body, view);
-  for (const p of spec.props || []) {
+  const allProps = spec.props || [];
+  const under = allProps.filter((p) => p.under);
+  const over = allProps.filter((p) => !p.under);
+  const drawProps = (list) => { for (const p of list) {
     const prop = PROPS[p.name];
     if (!prop) throw new Error('unknown prop: ' + p.name);
     if (prop.hat) hat = true;
@@ -378,8 +382,16 @@ function composeFrame(spec) {
     }
     const rows = p.mirror ? mirrorRows(prop.rows) : prop.rows;
     if (p.behind) stampRows(g, rows, r0, c0, (r, c) => g[r][c] === T);
+    // a band worn round the body (a headband) follows its outline exactly
+    else if (prop.clip === 'body') stampRows(g, rows, r0, c0, (r, c) => near[r][c]);
     else stampRows(g, rows, r0, c0);
-  }
+  } };
+  drawProps(under);
+
+  /* ---- paws raised in front of the body ---- */
+  for (const leg of overLegs) drawOverLeg(g, leg.mask, leg.far);
+
+  drawProps(over);
 
   /* ---- metadata ---- */
   const extent = columnExtents(bodyMask);
@@ -399,7 +411,8 @@ function composeFrame(spec) {
     crown: { r: crown.r - 1, c: crown.c },
     ends: { back: { r: midRow, c: backC }, front: { r: midRow, c: frontC } },
     eyes: liveEyes,
-    hat: hat,
+    // noTrait: a pose where a stem or crown would look wrong (on his back)
+    hat: hat || !!spec.noTrait,
     top: Math.min.apply(null, cols.map((c) => extent.top[c]))
   };
 

@@ -49,7 +49,8 @@ const CLIPS = {
     frames: ['run_0', 'run_1', 'run_2', 'run_3', 'run_4', 'run_5'],
     durations: [60, 55, 60, 55, 60, 55],
     loop: true,
-    next: null
+    next: null,
+    fx: [[0, 'dust', 1, 0.22, 0.97], [3, 'dust', 1, 0.22, 0.97]]
   },
 
   // sideways against a screen edge, diagonal pairs reaching in turn
@@ -81,7 +82,8 @@ const CLIPS = {
     frames: ['land_0', 'land_1', 'land_2', 'land_3'],
     durations: [80, 90, 110, 140],
     loop: false,
-    next: 'idle'
+    next: 'idle',
+    fx: [[0, 'dust', 3, 0.5, 0.97]]
   },
 
   // peeling himself off the floor
@@ -216,7 +218,8 @@ const CLIPS = {
     frames: ['surprise_0', 'surprise_1', 'surprise_2'],
     durations: [70, 200, 360],
     loop: false,
-    next: 'idle'
+    next: 'idle',
+    fx: [[0, 'exclaim', 1, 0.62, 0.1]]
   },
 
   sulk: {
@@ -237,7 +240,8 @@ const CLIPS = {
     frames: ['eat_0', 'eat_1', 'eat_2', 'eat_3', 'eat_2', 'eat_3'],
     durations: [340, 300, 220, 220, 220, 380],
     loop: false,
-    next: 'idle'
+    next: 'idle',
+    fx: [[1, 'crumb', 3, 0.84, 0.7], [3, 'crumb', 2, 0.84, 0.72]]
   },
 
   /* ---- work states ---- */
@@ -271,7 +275,8 @@ const CLIPS = {
     frames: ['celebrating_0', 'celebrating_1', 'celebrating_2', 'celebrating_1', 'celebrating_3'],
     durations: [120, 150, 180, 150, 200],
     loop: true,
-    next: null
+    next: null,
+    fx: [[2, 'sparkle', 2, 0.5, 0.25]]
   },
 
   // sitting with a steaming mug, sipping now and then
@@ -288,8 +293,319 @@ const CLIPS = {
     durations: [1200, 1200, 1200, 1400],
     loop: true,
     next: null
+  },
+
+  /* ---- movement ---- */
+
+  // the beat where he faces you as he changes direction
+  turn: {
+    frames: ['turn_0', 'turn_0'],
+    durations: [60, 60],
+    loop: false,
+    next: 'idle'
+  },
+
+  hop: {
+    frames: ['hop_0', 'hop_1', 'hop_2', 'hop_1', 'land_1', 'land_3'],
+    durations: [90, 100, 160, 100, 90, 120],
+    loop: false,
+    next: 'idle',
+    fx: [[4, 'dust', 2, 0.5, 0.97]]
+  },
+
+  /* ---- more idle behaviours ---- */
+
+  sneeze: {
+    frames: ['sneeze_0', 'sneeze_1', 'sneeze_2', 'sneeze_3'],
+    durations: [380, 460, 220, 520],
+    loop: false,
+    next: 'idle',
+    fx: [[2, 'water', 4, 0.86, 0.66]]
+  },
+
+  // a back foot at an itch
+  scratch: {
+    frames: ['sit_0', 'scratch_0', 'scratch_1', 'scratch_0', 'scratch_1', 'scratch_0', 'scratch_1', 'sit_0'],
+    durations: [400, 110, 110, 110, 110, 110, 110, 500],
+    loop: false,
+    next: 'idle'
+  },
+
+  // the wet-dog shake-off
+  shake: {
+    frames: ['shake_0', 'shake_1', 'shake_0', 'shake_1', 'shake_0', 'shake_1', 'shake_0', 'shake_1', 'shake_2'],
+    durations: [70, 70, 70, 70, 70, 70, 70, 70, 420],
+    loop: false,
+    next: 'idle',
+    fx: [[1, 'sweat', 2, 0.2, 0.5], [3, 'sweat', 2, 0.8, 0.5], [6, 'sweat', 1, 0.3, 0.45]]
+  },
+
+  // over onto his back, paws in the air
+  roll: {
+    frames: ['getup_1', 'roll_0', 'roll_1', 'roll_0', 'roll_1', 'roll_0', 'roll_1', 'getup_2'],
+    durations: [200, 260, 260, 260, 260, 260, 260, 260],
+    loop: false,
+    next: 'idle'
+  },
+
+  sniff: {
+    frames: ['sniff_0', 'sniff_1', 'sniff_0', 'sniff_1', 'sniff_0', 'sniff_1', 'sniff_2'],
+    durations: [300, 300, 300, 300, 300, 300, 700],
+    loop: false,
+    next: 'idle',
+    fx: [[6, 'sparkle', 2, 0.82, 0.4]]
+  },
+
+  // legs tucked away, perfectly content
+  loaf: {
+    frames: ['loaf_0', 'loaf_1', 'loaf_0', 'loaf_1'],
+    durations: [1400, 400, 1600, 2000],
+    loop: false,
+    next: 'idle'
+  },
+
+  bounce: {
+    frames: ['bounce_0', 'bounce_1', 'bounce_2', 'bounce_1', 'bounce_0', 'bounce_1', 'bounce_2', 'bounce_1', 'bounce_0', 'land_3'],
+    durations: [110, 110, 160, 110, 110, 110, 160, 110, 110, 220],
+    loop: false,
+    next: 'idle'
+  },
+
+  whistle: {
+    frames: ['whistle_0', 'whistle_1', 'whistle_0', 'whistle_1', 'whistle_0', 'whistle_1'],
+    durations: [420, 420, 420, 420, 420, 420],
+    loop: false,
+    next: 'idle',
+    fx: [[0, 'note', 1, 0.82, 0.38], [2, 'note', 1, 0.82, 0.38], [4, 'note', 1, 0.82, 0.38]]
+  },
+
+  // at night, sitting up looking at the stars
+  stargaze: {
+    frames: ['stargaze_0', 'stargaze_1', 'stargaze_0', 'stargaze_1'],
+    durations: [1400, 1400, 1400, 1400],
+    loop: false,
+    next: 'idle',
+    fx: [[0, 'sparkle', 2, 0.75, 0.08], [2, 'sparkle', 2, 0.6, 0.12]]
+  },
+
+  // turns round to face you and waves
+  lookatyou: {
+    frames: ['turn_0', 'lookatyou_0', 'lookatyou_1', 'lookatyou_2', 'lookatyou_1', 'lookatyou_2', 'lookatyou_0', 'turn_0'],
+    durations: [120, 1100, 350, 180, 180, 180, 500, 120],
+    loop: false,
+    next: 'idle'
+  },
+
+  // a dramatic pirouette - grape's favourite
+  twirl: {
+    frames: ['twirl_0', 'twirl_1', 'twirl_2', 'twirl_3', 'twirl_0', 'twirl_1', 'twirl_2', 'twirl_3', 'proud_0'],
+    durations: [160, 110, 110, 110, 110, 110, 110, 400, 500],
+    loop: false,
+    next: 'idle',
+    fx: [[7, 'sparkle', 3, 0.5, 0.3]]
+  },
+
+  // bubblegum's signature: a bubble that gets out of hand
+  gum: {
+    frames: ['gum_0', 'gum_1', 'gum_2', 'gum_3', 'happy_2'],
+    durations: [450, 450, 650, 350, 300],
+    loop: false,
+    next: 'idle',
+    fx: [[3, 'bubble', 4, 0.82, 0.62]]
+  },
+
+  /* ---- more emotions ---- */
+
+  // tickled
+  giggle: {
+    frames: ['giggle_0', 'giggle_1', 'giggle_0', 'giggle_1', 'giggle_0', 'giggle_1', 'giggle_2', 'giggle_0', 'giggle_1', 'giggle_2'],
+    durations: [90, 90, 90, 90, 90, 90, 120, 90, 90, 220],
+    loop: false,
+    next: 'idle',
+    fx: [[0, 'heart', 1, 0.7, 0.2], [6, 'heart', 1, 0.6, 0.2]]
+  },
+
+  // right on the nose
+  boop: {
+    frames: ['boop_0', 'boop_1', 'boop_2'],
+    durations: [170, 140, 520],
+    loop: false,
+    next: 'idle',
+    fx: [[0, 'sparkle', 1, 0.92, 0.6]]
+  },
+
+  angry: {
+    frames: ['angry_0', 'angry_1', 'angry_2', 'angry_1', 'angry_2', 'angry_0'],
+    durations: [300, 180, 140, 180, 140, 600],
+    loop: false,
+    next: 'idle',
+    fx: [[2, 'steam', 2, 0.55, 0.3], [2, 'dust', 2, 0.78, 0.97], [4, 'steam', 2, 0.55, 0.3]]
+  },
+
+  sad: {
+    frames: ['sad_0', 'sad_1', 'sad_0', 'sad_1'],
+    durations: [700, 700, 700, 700],
+    loop: false,
+    next: 'idle',
+    fx: [[0, 'tear', 1, 0.66, 0.66], [2, 'tear', 1, 0.8, 0.66]]
+  },
+
+  scared: {
+    frames: ['scared_0', 'scared_1', 'scared_0', 'scared_1', 'scared_0', 'scared_1', 'scared_0', 'scared_1', 'scared_0', 'scared_1'],
+    durations: [60, 60, 60, 60, 60, 60, 60, 60, 60, 300],
+    loop: false,
+    next: 'idle',
+    fx: [[0, 'sweat', 1, 0.4, 0.42]]
+  },
+
+  proud: {
+    frames: ['proud_0', 'proud_1', 'proud_0'],
+    durations: [400, 700, 500],
+    loop: false,
+    next: 'idle',
+    fx: [[1, 'sparkle', 3, 0.5, 0.35]]
+  },
+
+  confused: {
+    frames: ['confused_0', 'confused_1', 'confused_0'],
+    durations: [700, 700, 500],
+    loop: false,
+    next: 'idle',
+    fx: [[0, 'question', 1, 0.62, 0.14]]
+  },
+
+  excited: {
+    frames: ['excited_0', 'excited_1', 'excited_0', 'excited_1', 'excited_0', 'happy_2'],
+    durations: [90, 210, 90, 210, 90, 220],
+    loop: false,
+    next: 'idle',
+    fx: [[1, 'sparkle', 2, 0.5, 0.3], [3, 'sparkle', 2, 0.5, 0.3]]
+  },
+
+  // shaken about too much while being carried
+  queasy: {
+    frames: ['queasy_0', 'queasy_1', 'queasy_0', 'queasy_1', 'queasy_0', 'queasy_1'],
+    durations: [450, 450, 450, 450, 450, 450],
+    loop: false,
+    next: 'idle',
+    fx: [[1, 'sweat', 1, 0.3, 0.35]]
+  },
+
+  // straight into the wall
+  bonk: {
+    frames: ['bonk_0', 'bonk_1'],
+    durations: [180, 1000],
+    loop: false,
+    next: 'idle',
+    fx: [[1, 'star', 4, 0.55, 0.36]]
+  },
+
+  /* ---- play ---- */
+
+  // eyes on the pointer, the butt wiggle - and then the pounce
+  pounce_ready: {
+    frames: ['pounce_ready_0', 'pounce_ready_1', 'pounce_ready_2', 'pounce_ready_1', 'pounce_ready_2', 'pounce_ready_0'],
+    durations: [220, 110, 110, 110, 110, 260],
+    loop: false,
+    next: 'pounce'
+  },
+
+  pounce: {
+    frames: ['pounce_0', 'pounce_1', 'pounce_2', 'happy_2'],
+    durations: [90, 280, 300, 250],
+    loop: false,
+    next: 'idle',
+    fx: [[2, 'dust', 3, 0.5, 0.97]]
+  },
+
+  /* ---- keeping you company at the computer ---- */
+
+  // typing along with you on a tiny laptop
+  type_along: {
+    frames: ['type_0', 'type_1', 'type_0', 'type_1', 'type_0', 'type_1', 'type_0'],
+    durations: [140, 140, 140, 140, 700, 140, 140],
+    loop: true,
+    next: null
+  },
+
+  // ...in a hard hat, while you code
+  code: {
+    frames: ['code_0', 'code_1', 'code_0', 'code_1', 'code_0', 'code_1', 'code_0'],
+    durations: [140, 140, 140, 140, 900, 140, 140],
+    loop: true,
+    next: null
+  },
+
+  // a sweatband for a Pomodoro
+  focus: {
+    frames: ['focus_0', 'focus_1'],
+    durations: [900, 900],
+    loop: true,
+    next: null
+  },
+
+  // popcorn while you watch something
+  popcorn: {
+    frames: ['popcorn_0', 'popcorn_1', 'popcorn_0', 'popcorn_1'],
+    durations: [1100, 280, 800, 280],
+    loop: true,
+    next: null,
+    fx: [[1, 'crumb', 2, 0.72, 0.64]]
+  },
+
+  // headphones on, bopping to your music
+  headbop: {
+    frames: ['headbop_0', 'headbop_1'],
+    durations: [260, 260],
+    loop: true,
+    next: null,
+    fx: [[0, 'note', 1, 0.78, 0.2]]
+  },
+
+  // painting, beret on, while you design
+  paint: {
+    frames: ['paint_0', 'paint_1'],
+    durations: [420, 420],
+    loop: true,
+    next: null,
+    fx: [[1, 'sparkle', 1, 0.9, 0.72]]
+  },
+
+  // scribbling notes while you write
+  scribble: {
+    frames: ['scribble_0', 'scribble_1'],
+    durations: [200, 200],
+    loop: true,
+    next: null
+  },
+
+  // holding up the post while you do your email
+  mail: {
+    frames: ['mail_0', 'mail_1'],
+    durations: [700, 700],
+    loop: true,
+    next: null
+  },
+
+  // a gamepad of his own
+  gamepad: {
+    frames: ['gamepad_0', 'gamepad_1', 'gamepad_0', 'gamepad_1', 'gamepad_0'],
+    durations: [150, 150, 150, 150, 700],
+    loop: true,
+    next: null
   }
 };
+
+/**
+ * Particle cues: [frameIndex, kind, count, x, y]. x and y are fractions of
+ * the 64x64 sprite box in its own right-facing frame; the renderer mirrors
+ * them when Pip faces left and fires each cue once, as its frame starts.
+ */
+function cuesAt(name, index) {
+  const clip = CLIPS[name];
+  if (!clip || !clip.fx) return [];
+  return clip.fx.filter((cue) => cue[0] === index);
+}
 
 /** Total run time of a clip in ms. */
 function clipDuration(name) {
@@ -307,21 +623,22 @@ function frameAt(name, elapsed) {
   if (!clip) return { frame: null, done: true };
   const total = clipDuration(name);
   let t = elapsed;
+  const last = clip.frames.length - 1;
   if (clip.loop) {
     t = total > 0 ? elapsed % total : 0;
   } else if (elapsed >= total) {
-    return { frame: clip.frames[clip.frames.length - 1], done: true };
+    return { frame: clip.frames[last], done: true, index: last };
   }
   for (let i = 0; i < clip.frames.length; i++) {
     t -= clip.durations[i];
-    if (t < 0) return { frame: clip.frames[i], done: false };
+    if (t < 0) return { frame: clip.frames[i], done: false, index: i };
   }
-  return { frame: clip.frames[clip.frames.length - 1], done: !clip.loop };
+  return { frame: clip.frames[last], done: !clip.loop, index: last };
 }
 
 const CLIP_NAMES = Object.keys(CLIPS);
 
-const Animations = { CLIPS, CLIP_NAMES, clipDuration, frameAt };
+const Animations = { CLIPS, CLIP_NAMES, clipDuration, frameAt, cuesAt };
 
 if (typeof window !== 'undefined') {
   window.Pip = window.Pip || {};

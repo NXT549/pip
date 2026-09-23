@@ -289,6 +289,133 @@ const LINES = {
     'On battery. I will try not to bounce too hard.',
     'Cordless. Look at us.',
     'Off the leash!'
+  ],
+
+  tickle: [
+    'Hee! Stop! No, do not stop.',
+    'That tickles! Hehe!',
+    'Ahaha - not the jelly!',
+    'I am extremely ticklish, it turns out.',
+    'Hehehe! Wobble wobble!',
+    'Who taught you that?!',
+    'Squirm squirm squirm!'
+  ],
+
+  boop: [
+    'Boop!',
+    'Hey, that is my nose!',
+    'Beep boop.',
+    'Booped. Rude. Do it again.',
+    'My nose has been claimed.',
+    'Direct hit!'
+  ],
+
+  pounce: [
+    'What is THAT?',
+    'Wiggle wiggle... POUNCE!',
+    'I am a fearsome hunter.',
+    'Gotcha! ...no?',
+    'That pointer is mine!',
+    'Stalking. Very quietly.'
+  ],
+
+  queasy: [
+    'Too... much... shaking.',
+    'I feel like a jelly smoothie.',
+    'The room is doing loops.',
+    'Gently next time, maybe?',
+    'I think my shine fell off.',
+    'Urp. Wobbly.'
+  ],
+
+  bonk: [
+    'Ow! Wall.',
+    'Who put that there?',
+    'Bonk. I meant to do that.',
+    'Seeing stars. Nice ones, though.',
+    'That edge came out of nowhere.',
+    'Splat!'
+  ],
+
+  typing_company: [
+    'I will type too. Very important work.',
+    'Clack clack clack!',
+    'We are SO productive right now.',
+    'Typing buddies!',
+    'I am writing a novel. It is about beans.',
+    'You type, I type. Teamwork.'
+  ],
+
+  app_code: [
+    'Hard hat on. Build zone!',
+    'Semicolons: check.',
+    'I hope it compiles first time!',
+    'I will hold the laptop steady.',
+    'Debugging buddy reporting for duty.',
+    'Beep boop, I am a programmer now.'
+  ],
+
+  app_video: [
+    'Ooh, what are we watching?',
+    'I brought popcorn.',
+    'Movie time! Shh.',
+    'No spoilers please.',
+    'Popcorn: ready. Pip: ready.',
+    'Is this the good bit?'
+  ],
+
+  app_music: [
+    'Ooh, this one is a bop.',
+    'Headphones on. Vibes: engaged.',
+    'Is it okay if I dance?',
+    'I can feel it in my jelly.',
+    'Tap tap tap.',
+    'Excellent taste, as always.'
+  ],
+
+  app_design: [
+    'Beret: on. Masterpiece: pending.',
+    'I am also an artist.',
+    'That is looking lovely.',
+    'A little more colour, maybe?',
+    'We are making art today.',
+    'Painting along with you!'
+  ],
+
+  app_writing: [
+    'I will take notes.',
+    'Scribble scribble.',
+    'Every word is a good word.',
+    'Writing buddies!',
+    'I am on page one. Going well.',
+    'Ooh, what are we writing?'
+  ],
+
+  app_email: [
+    'Special delivery!',
+    'I will hold the post.',
+    'Inbox adventures!',
+    'Maybe one of them is fan mail.',
+    'I licked the stamp. Sorry.',
+    'Email time. You have got this.'
+  ],
+
+  app_game: [
+    'Ooh, can I play too?',
+    'Player two has joined!',
+    'Button mashing is my specialty.',
+    'Go go go!',
+    'I am cheering for you.',
+    'Gamepad buddy!'
+  ],
+
+  tab_juggling: [
+    'So many windows!',
+    'I am trying to keep up!',
+    'Juggling everything, like you.',
+    'Whoa, busy busy.',
+    'Which one are we doing now?',
+    'Tab tab tab tab!'
   ]
 };
 

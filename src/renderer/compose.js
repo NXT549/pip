@@ -256,13 +256,17 @@
     if (meta.rotate === -90) { const t = rr; rr = cc; cc = size - 1 - t; }
     else if (meta.rotate === 90) { const t = rr; rr = size - 1 - cc; cc = t; }
     const b = meta.body;
-    return { u: (cc + 0.5 - b.cx) / b.w, v: (rr + 0.5 - b.cy) / b.h, r: rr, c: cc };
+    const x = cc + 0.5 - b.cx, y = rr + 0.5 - b.cy;
+    return { u: x / b.w, v: y / b.h, x: x, y: y };
   }
 
   /**
-   * Paint a pattern onto body pixels. `fn(u, v, r, c)` returns true where the
-   * pattern shows. Shading is kept: lit and mid tones take X, shadow takes x,
-   * so a stripe still wraps round the bean instead of lying flat on it.
+   * Paint a pattern onto body pixels. `fn(u, v, x, y)` gets the pixel as a
+   * fraction of the body ellipse (u, v: -1..1) and in pixels from its centre
+   * (x, y) - so a stripe stays put on the bean from frame to frame. It
+   * returns false for no pattern, true or 'X' for the pattern colour, or 'Y'
+   * for the second colour (a watermelon's rind). Shading is kept: shadowed
+   * pixels take the shade key, so a stripe wraps round the bean.
    */
   function applyPattern(grid, meta, fn) {
     if (!fn || !meta || !meta.body) return;
@@ -273,8 +277,11 @@
         if (!BODY_TONES[ch]) continue;
         const p = bodyCoords(meta, size, r, c);
         if (p.u * p.u + p.v * p.v > 1.02) continue;   // legs keep their colour
-        if (!fn(p.u, p.v, p.r, p.c)) continue;
-        grid[r][c] = ch === 'D' || ch === 'd' ? 'x' : 'X';
+        const hit = fn(p.u, p.v, p.x, p.y);
+        if (!hit) continue;
+        const dark = ch === 'D' || ch === 'd';
+        if (hit === 'Y') grid[r][c] = dark ? 'Z' : 'Y';
+        else grid[r][c] = dark ? 'x' : 'X';
       }
     }
   }
@@ -334,7 +341,7 @@
           if (ch === T) continue;
           const r = pt.r - ay + dr, c = pt.c - ax + dc;
           if (r < 0 || r >= size || c < 0 || c >= size) continue;
-          if (!over[grid[r][c]] && !(trait.overBody && BODY_TONES[grid[r][c]])) continue;
+          if (!over[grid[r][c]] && !(trait.overBody && PAINTABLE[grid[r][c]])) continue;
           grid[r][c] = ch;
         }
       }

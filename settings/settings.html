@@ -35,6 +35,35 @@
       <option value="hyper">Hyper</option>
     </select>
   </div>
+  <div class="row">
+    <label for="effects">Special effects<span class="hint">The glow, sparkles and snow of the rarer Pips. Reduced and Off use less CPU.</span></label>
+    <select id="effects">
+      <option value="full">Full</option>
+      <option value="reduced">Reduced</option>
+      <option value="off">Off</option>
+    </select>
+  </div>
+</section>
+
+<section>
+  <h2>Pip notices</h2>
+  <p class="note">Pip can notice what kind of app you are using and keep you company: typing along while you type, popcorn for a video, headphones for music. Only the kind of app is kept, never the name or title, and nothing leaves your computer.</p>
+  <div class="row">
+    <label for="appAware">Notice which app I&rsquo;m using<span class="hint">Reads the name of the app in front, every couple of seconds.</span></label>
+    <input type="checkbox" id="appAware">
+  </div>
+  <div class="row">
+    <label for="appTitles">Use window titles<span class="hint">Tells sites apart in a browser (YouTube is video, GitHub is code). Titles are matched against a word list and thrown away.</span></label>
+    <input type="checkbox" id="appTitles">
+  </div>
+  <div class="row">
+    <label for="hideFullscreen">Hide during fullscreen apps<span class="hint">Steps aside for games, videos and presentations.</span></label>
+    <input type="checkbox" id="hideFullscreen">
+  </div>
+  <div class="row">
+    <label for="quietMeetings">Quiet during meetings<span class="hint">No speech bubbles while Zoom, Teams, Webex or Meet is in front.</span></label>
+    <input type="checkbox" id="quietMeetings">
+  </div>
 </section>
 
 <section>

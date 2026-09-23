@@ -102,6 +102,7 @@ function clamp(body, bounds) {
  * @param {object} bounds  {left, right, top, bottom, height}
  * @param {object} [opts]  {walkSpeed} horizontal drive while grounded
  * @returns {object} events that happened this step, e.g. {landed:true, speed}
+ *                   or {wallHit: speed, wall: 'left'|'right'}
  */
 function step(body, dt, bounds, opts) {
   opts = opts || {};
@@ -186,6 +187,12 @@ function step(body, dt, bounds, opts) {
 
   if (body.vx > 4) body.facing = 1;
   else if (body.vx < -4) body.facing = -1;
+
+  // Thrown into a screen edge: report how hard, before clamp() stops him.
+  if ((body.x < bounds.left && body.vx < 0) || (body.x > bounds.right && body.vx > 0)) {
+    events.wallHit = Math.abs(body.vx);
+    events.wall = body.x < bounds.left ? 'left' : 'right';
+  }
 
   clamp(body, bounds);
 

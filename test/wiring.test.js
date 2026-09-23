@@ -25,6 +25,8 @@ const rendererSrc = read('src/renderer/renderer.js');
 const brainSrc = read('src/main/brain.js');
 const preloadSrc = read('preload.js');
 const allSrc = mainSrc + rendererSrc + brainSrc;
+const animationsSrc = read('src/renderer/animations.js');
+const effectsSrc = fs.existsSync(path.join(ROOT, 'src/renderer/effects.js')) ? read('src/renderer/effects.js') : '';
 
 const Animations = require('../src/renderer/animations.js');
 const Lines = require('../src/renderer/lines.js');
@@ -58,14 +60,42 @@ test('every speech situation has a caller', () => {
     'ONBOARDING is declared but never passed to say()');
   const viaTable = [...table[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 
+  // What Pip says to keep you company comes from a table keyed by app
+  // category; it is checked the same way.
+  const context = mainSrc.match(/const CONTEXT_LINES = \{([^}]*)\}/);
+  assert.ok(context, 'the CONTEXT_LINES table has gone missing');
+  assert.ok(/say\(\s*CONTEXT_LINES\[/.test(mainSrc), 'CONTEXT_LINES is declared but never passed to say()');
+  viaTable.push(...[...context[1].matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]));
+
   const dead = Lines.SITUATIONS.filter((s) =>
     !new RegExp("say\\(\\s*'" + s + "'").test(mainSrc) && !viaTable.includes(s));
   assert.deepStrictEqual(dead, [],
     'these situations have lines written but are never said: ' + dead.join(', '));
 });
 
+test('every say() names a situation that has lines', () => {
+  const said = [...mainSrc.matchAll(/say\(\s*'([^']+)'/g)].map((m) => m[1]);
+  const unknown = said.filter((s) => Lines.SITUATIONS.indexOf(s) === -1);
+  assert.deepStrictEqual([...new Set(unknown)], [],
+    'these are said but have no lines, so Pip would silently say nothing: ' + unknown.join(', '));
+});
+
+test('every particle cue in a clip names a real kind and frame', () => {
+  const bad = [];
+  for (const name of Animations.CLIP_NAMES) {
+    for (const cue of Animations.CLIPS[name].fx || []) {
+      if (Particles.KINDS.indexOf(cue[1]) === -1) bad.push(name + ': unknown kind ' + cue[1]);
+      if (cue[0] < 0 || cue[0] >= Animations.CLIPS[name].frames.length) bad.push(name + ': no frame ' + cue[0]);
+    }
+  }
+  assert.deepStrictEqual(bad, []);
+});
+
 test('every particle kind gets spawned somewhere', () => {
-  const dead = Particles.KINDS.filter((kind) => !quoted(kind).test(allSrc));
+  // Clips cue particles on their own frames, and the special effects of the
+  // rarer Pips spawn their own, so both count as somewhere.
+  const src = allSrc + animationsSrc + effectsSrc;
+  const dead = Particles.KINDS.filter((kind) => !quoted(kind).test(src));
   assert.deepStrictEqual(dead, [],
     'these particle kinds are defined but never spawned: ' + dead.join(', '));
 });

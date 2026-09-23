@@ -24,8 +24,9 @@
     'pomodoroWork', 'pomodoroBreak', 'pomodoroLongBreak', 'pomodoroLongEvery',
     'drowsyAfter', 'exhaustedAfter', 'waterInterval'
   ];
-  const SELECT_FIELDS = ['petSize', 'activityLevel'];
-  const TOGGLE_FIELDS = ['notifications', 'launchAtLogin', 'compatibilityMode'];
+  const SELECT_FIELDS = ['petSize', 'activityLevel', 'effects'];
+  const TOGGLE_FIELDS = ['notifications', 'launchAtLogin', 'compatibilityMode',
+    'appAware', 'appTitles', 'hideFullscreen', 'quietMeetings'];
 
   let current = null;
 

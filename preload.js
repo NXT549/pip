@@ -11,14 +11,15 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 /** main -> renderer channels the overlay may listen on. */
 const INBOUND = [
-  'pip:settings',   // {flavor, scale, activityLevel, quiet, dev}
+  'pip:settings',   // {flavor, scale, activityLevel, quiet, nightcap, effects, dev}
   'pip:bounds',     // {left, right, top, bottom, width, height}
   'pip:state',      // {state, clip, facing, walkDir, walkSpeed}
   'pip:cursor',     // {x, y, inside}
   'pip:say',        // {text, ms}
   'pip:particles',  // {kind, count}
   'pip:pomodoro',   // {running, phase, remainingMs, totalMs}
-  'pip:goto',       // {x} - trot to this overlay x
+  'pip:goto',       // {x, speed?} - trot to this overlay x
+  'pip:action',     // {kind:'pounce'|'hop', x?, delay?} - a move main decided on
   'pip:reset'       // no payload - drop Pip in from the top again
 ];
 
@@ -28,9 +29,10 @@ const OUTBOUND = [
   'pip:set-interactive', // {interactive:boolean}
   'pip:grabbed',         // {}
   'pip:dropped',         // {x, y} in overlay DIPs
-  'pip:click',           // {x, y} - main classifies the pattern
+  'pip:click',           // {x, y, face} - main classifies the pattern
   'pip:pet',             // {} - cursor rested on Pip for ~1s
   'pip:startle',         // {} - fast jerky cursor movement nearby
+  'pip:gesture',         // {kind:'tickle'|'shake'|'pounce'|'circle'|'bonk', x?}
   'pip:climb',           // {climbing:boolean}
   'pip:battery',         // {level:0..1, charging:boolean}
   'pip:context-menu',    // {x, y} in overlay DIPs

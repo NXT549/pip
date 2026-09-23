@@ -26,6 +26,7 @@
   const Bubbles = P.Bubbles;
   const Compose = P.Compose;
   const Pips = P.Pips;
+  const Effects = P.Effects;
 
   const SIZE = Sprites.FRAME_SIZE;
   /** Sprite row the feet rest on, plus one, so we can sit Pip on the floor. */
@@ -63,6 +64,20 @@
   /** How far Pip swings behind the pointer while being carried, in radians. */
   const MAX_SWAY = 0.38;
 
+  /** Gestures. The renderer notices; main decides what Pip does about it. */
+  const TICKLE_REVERSALS = 4;      // back-and-forth wiggles over Pip...
+  const TICKLE_WINDOW = 1000;      // ...within this long
+  const TICKLE_COOLDOWN = 3000;
+  const PET_MAX_SPEED = 260;       // a pet is a resting hand, not a swipe
+  const SHAKE_REVERSALS = 4;       // shaken this many times while carried
+  const SHAKE_WINDOW = 1500;
+  const SHAKE_MIN_SPEED = 380;
+  const POUNCE_WATCH_S = 0.7;      // a slow pointer in front for this long...
+  const POUNCE_COOLDOWN = 20000;
+  const CIRCLE_TURNS = 1.5;        // the pointer going round him this many times
+  const CIRCLE_WINDOW = 3500;
+  const BONK_SPEED = 450;          // thrown into a wall at least this hard
+
   const CLIMB_SPEED = 130;         // DIP/s up a wall
   const CLIMB_CHANCE = 0.25;       // on bumping a wall while wandering
   const HANG_MS = 2600;
@@ -74,7 +89,7 @@
    * State
    * ---------------------------------------------------------------- */
 
-  let settings = { flavor: 'cherry', scale: 4, activityLevel: 'normal', quiet: false };
+  let settings = { flavor: 'cherry', scale: 2, activityLevel: 'normal', quiet: false, effects: 'full' };
   let bounds = { left: 0, right: 100, top: 0, bottom: 100, width: 100, height: 100 };
   let dpr = window.devicePixelRatio || 1;
 
@@ -88,6 +103,8 @@
   let frameCache = new Map();
   let palette = null;
   let pipType = null;
+  /** The current Pip's special effect (effects.js), or null. */
+  let fx = null;
 
   let look = { dx: 0, dy: 0 };
   let blinkAt = 0;
@@ -128,6 +145,24 @@
   let pomodoro = { running: false, phase: 'off', remainingMs: 0, totalMs: 0 };
   let battery = null;              // {level, charging} once known
 
+  // gesture tracking
+  let tickleDir = 0;
+  let tickleTimes = [];
+  let lastTickleAt = 0;
+  let shakeSign = 0;
+  let shakeTimes = [];
+  let shakeSent = false;
+  let pounceWatch = 0;
+  let lastPounceAt = 0;
+  let orbitAngle = null;
+  let orbitTotal = 0;
+  let orbitSince = 0;
+  let lastCircleAt = 0;
+  /** A move main asked for: {kind:'pounce', x, at} - launched when due. */
+  let action = null;
+  let actionUntil = 0;
+  let gotoSpeed = 80;
+
   let climbUntil = 0;
   let climbTargetY = 0;
   let hangUntil = 0;
@@ -149,6 +184,11 @@
   let stuckReported = false;
 
   let lastDrawKey = '';
+  /** Which clip frame last fired its particle cues, so each fires once. */
+  let cueKey = '';
+  /** Until when the front-facing turn beat shows, after a change of direction. */
+  let turnUntil = 0;
+  let lastFacing = 1;
   let lastTick = 0;
   let sleeping = false;
   let ready = false;
@@ -162,6 +202,7 @@
     pipType = Pips.get(settings.flavor);
     palette = Palettes.resolve(pipType.palette);
     frameCache = new Map();
+    fx = pipType.effect ? Effects.create(pipType.effect, settings.effects || 'full') : null;
     lastDrawKey = '';
   }
 
@@ -308,6 +349,7 @@
   function advanceAnimation(now) {
     const res = Animations.frameAt(clip, now - clipStart);
     if (res.frame) currentFrame = res.frame;
+    fireCues(clip, res.index, now);
     if (res.done) {
       if (localClip && clip === localClip) {
         // A landing or a get-up has played out; go back to what Pip was doing.
@@ -318,9 +360,42 @@
       }
     }
     applyStandStill(now);
+    applyTurn(now);
     applyNightcap();
     updateBlink(now);
     updateLook();
+  }
+
+  /**
+   * Particle cues written into a clip (animations.js `fx`): the sneeze spray,
+   * the stomp's steam, the notes of a whistle. Each fires once, as its frame
+   * starts, placed on the sprite and mirrored when Pip faces left.
+   */
+  function fireCues(name, index, now) {
+    if (index === undefined) return;
+    const key = name + ':' + Math.round(clipStart) + ':' + index;
+    if (key === cueKey) return;
+    cueKey = key;
+    const cues = Animations.cuesAt(name, index);
+    if (!cues.length) return;
+    const rect = spriteRect();
+    for (const cue of cues) {
+      const fx = body.facing === -1 ? 1 - cue[3] : cue[3];
+      Particles.spawn(particleList, cue[1], rect.left + fx * rect.width, rect.top + cue[4] * rect.height, cue[2],
+        { dir: body.facing });
+    }
+  }
+
+  /**
+   * A change of direction on the ground shows one beat of Pip facing you,
+   * rather than snapping from one profile to the other.
+   */
+  function applyTurn(now) {
+    if (now >= turnUntil) return;
+    if (drag || body.climbing || !body.grounded) return;
+    if (!/^(idle|walk|run)_/.test(currentFrame)) return;
+    const turn = Animations.frameAt('turn', now - (turnUntil - Animations.clipDuration('turn')));
+    if (turn.frame) currentFrame = turn.frame;
   }
 
   /**
@@ -476,13 +551,19 @@
    * Drawing
    * ---------------------------------------------------------------- */
 
-  function drawPip() {
-    const rect = spriteRect();
-    const entry = getFrame(currentFrame);
-    if (!entry) return;
-    const img = entry.canvas;
+  /**
+   * Draw any 64x64 canvas exactly where and how Pip is drawn: flipped to
+   * face left, swinging while carried, lifted by a hovering effect. Pip
+   * himself and every silhouette effect (a glow, a shine) go through here,
+   * so they can never drift apart.
+   */
+  function drawSprite(img, alpha, filter, blend) {
+    const rect = fxRect();
     ctx.save();
     ctx.imageSmoothingEnabled = false;
+    if (alpha !== undefined && alpha < 1) ctx.globalAlpha = alpha;
+    if (filter) ctx.filter = filter;
+    if (blend) ctx.globalCompositeOperation = blend;
     // Carried, Pip hangs from the pointer and swings behind the direction of
     // travel, like anything held by its scruff would.
     if (sway !== 0) {
@@ -500,6 +581,61 @@
       ctx.drawImage(img, rect.left, rect.top, rect.width, rect.height);
     }
     ctx.restore();
+  }
+
+  function fxOn() {
+    return !!fx && settings.effects !== 'off';
+  }
+
+  /** The sprite rect, moved by a hovering or glitching effect. */
+  function fxRect() {
+    const rect = spriteRect();
+    if (!fxOn()) return rect;
+    return {
+      left: rect.left + fx.offsetX(lastTick),
+      top: rect.top + fx.offsetY(lastTick, settings.scale),
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
+  /** What an effect needs to know about Pip this frame. */
+  function fxInfo(entry) {
+    const rect = fxRect();
+    return {
+      rect: rect,
+      entry: entry,
+      meta: Sprites.FRAME_META[currentFrame],
+      facing: body.facing,
+      moving: Math.abs(body.vx) > 20 || !body.grounded,
+      px: settings.scale,
+      toScreen: (r, c) => ({
+        x: rect.left + ((body.facing === -1 ? SIZE - c : c) / SIZE) * rect.width,
+        y: rect.top + (r / SIZE) * rect.height
+      }),
+      drawSprite: drawSprite
+    };
+  }
+
+  function fxSpawn(kind, x, y, count, opts) {
+    Particles.spawn(particleList, kind, x, y, count, opts);
+  }
+
+  function drawPip() {
+    const entry = getFrame(currentFrame);
+    if (!entry) return;
+    if (!fxOn()) { drawSprite(entry.canvas); return; }
+    const info = fxInfo(entry);
+    fx.drawBehind(ctx, lastTick, info);
+    drawSprite(entry.canvas, fx.alpha(lastTick), fx.filter(lastTick));
+    fx.drawFront(ctx, lastTick, info);
+  }
+
+  /** Let the current effect emit, at most at its own leisurely rate. */
+  function updateEffects(dt) {
+    if (!fxOn() || drag && fx.name !== 'ghost') return;
+    const entry = getFrame(currentFrame);
+    if (entry) fx.update(dt, lastTick, fxInfo(entry), fxSpawn);
   }
 
   /**
@@ -590,6 +726,7 @@
       Math.round(rect.width * 2), Math.round(rect.height * 2),
       body.facing, settings.flavor,
       look.dx, look.dy, isBlinking() ? 'b' : '-',
+      fxOn() && fx.animated ? Math.floor(lastTick / FX_MS) : '-',
       Math.round(sway * 60),
       // particle positions change every tick, so the count alone is not
       // enough - repaint while anything is in flight
@@ -632,6 +769,7 @@
       const v = Physics.throwVelocity(drag.samples, now);
       const target = Math.max(-MAX_SWAY, Math.min(MAX_SWAY, -v.vx / 1400));
       sway += (target - sway) * Math.min(1, dt * 9);
+      detectShake(v, now);
     } else if (sway !== 0) {
       // Settle back upright once he is put down.
       sway += (0 - sway) * Math.min(1, dt * 7);
@@ -652,9 +790,13 @@
 
     const opts = {};
     if (!drag && body.grounded && dir !== 0) {
-      opts.walkSpeed = dir * (gotoX !== null ? Math.max(walkSpeed, 80) : walkSpeed);
+      opts.walkSpeed = dir * (gotoX !== null ? Math.max(walkSpeed, gotoSpeed) : walkSpeed);
     }
     const events = Physics.step(body, dt, wb, opts);
+    if (body.facing !== lastFacing) {
+      lastFacing = body.facing;
+      if (body.grounded && !drag && !body.climbing) turnUntil = now + Animations.clipDuration('turn');
+    }
     if (events.respawned) {
       // Name the cause and the context. The bare "position was invalid" has
       // shown up in real logs with nothing to act on.
@@ -671,6 +813,13 @@
     // physics.js can end a climb by itself (reaching the floor), so re-sync
     // rather than leaving main convinced Pip is still on the wall.
     if (!body.climbing && lastClimbSent) sendClimb(false);
+    if (events.wallHit && events.wallHit > BONK_SPEED && !drag) {
+      notify('pip:gesture', { kind: 'bonk' });
+      Particles.spawn(particleList, 'spark', events.wall === 'left' ? wb.left - unit() * 6 : wb.right + unit() * 6,
+        body.y - unit() * 12, 4);
+    }
+    launchAction(now);
+    if (events.landed && fxOn() && getFrame(currentFrame)) fx.onLand(fxInfo(getFrame(currentFrame)), fxSpawn);
     if (events.landed) {
       // A gentle touchdown squashes and carries on; a real thump knocks Pip
       // flat and he has to pick himself up again.
@@ -692,7 +841,7 @@
       // would otherwise outlive the grab and block it.
       clearLocalClip(now);
     } else if (!body.climbing && now >= landedUntil) {
-      if (!body.grounded && body.vy > 120) {
+      if (!body.grounded && body.vy > 120 && now >= actionUntil) {
         setLocalClip('fall', now);
       } else if (dir !== 0 && body.grounded && pipState === 'idle'
                  && Math.abs(body.vx) > MIN_WALK_VX) {
@@ -709,9 +858,11 @@
       }
     }
 
+    watchForPounce(now, dt);
     checkStuck(now, dir, wb);
 
     advanceAnimation(now);
+    updateEffects(dt);
     updateParticles(dt);
     bubble = bubble ? Bubbles.update(bubble, Date.now()) : null;
     updatePetting(now);
@@ -747,6 +898,8 @@
 
   const ACTIVE_MS = 1000 / TARGET_FPS;
   const SLEEP_MS = 1000 / SLEEP_FPS;
+  /** Special effects never animate faster than this. */
+  const FX_MS = 1000 / 15;
   /** Upper bound on an idle sleep, so the watchdog and timers stay fresh. */
   const MAX_IDLE_MS = 1000;
 
@@ -796,10 +949,13 @@
 
   function nextDelay(now, dir) {
     if (sleeping) return SLEEP_MS;
+    // An effect's own ambient particles do not need 30fps; anything else does.
+    const busyParticles = particleList.some((p) => !p.ambient);
     const active =
       drag || overPip || body.climbing || !body.grounded ||
       dir !== 0 || Math.abs(body.vx) > 0.5 || gotoX !== null ||
-      localClip !== null || particleList.length > 0 || bubble !== null ||
+      localClip !== null || busyParticles || bubble !== null ||
+      action !== null || now < actionUntil || now < turnUntil ||
       sway !== 0 || Math.abs(body.squash - 1) > 0.01;
     if (active) return ACTIVE_MS;
     let next = msToNextFrame(now);
@@ -808,6 +964,8 @@
       const edge = now < blinkUntil ? blinkUntil : blinkAt;
       if (edge > now) next = Math.min(next, edge - now);
     }
+    // A glowing, hovering or sparkling Pip is redrawn at a gentle 15fps.
+    if (fxOn() && (fx.animated || particleList.length > 0)) next = Math.min(next, FX_MS);
     return Math.min(MAX_IDLE_MS, Math.max(ACTIVE_MS, next));
   }
 
@@ -899,6 +1057,8 @@
   /** Resting the cursor on Pip for a second counts as a pet. */
   function updatePetting(now) {
     if (drag || !overPip) return;
+    // a pet is a resting hand; sweeping about restarts the count
+    if (Math.hypot(cursor.vx, cursor.vy) > PET_MAX_SPEED && now - cursor.t < 150) { hoverSince = now; return; }
     if (!hoverSince) { hoverSince = now; return; }
     if (petSent) return;
     if (now - hoverSince >= PET_MS) {
@@ -919,6 +1079,7 @@
   }
 
   function trackCursor(x, y, t) {
+    const dx0 = x - cursor.x;
     const dt = (t - cursor.t) / 1000;
     if (dt > 0 && dt < 0.5) {
       cursor.vx = (x - cursor.x) / dt;
@@ -928,6 +1089,9 @@
     cursor.y = y;
     cursor.t = t;
     cursor.inside = true;
+
+    detectTickle(x, dx0, t);
+    detectCircle(x, y, t);
 
     // Fast, jerky movement close by makes Pip jump.
     const speed = Math.hypot(cursor.vx, cursor.vy);
@@ -940,6 +1104,107 @@
           { dir: -body.facing });
       }
     }
+  }
+
+  /**
+   * Tickling: the pointer wiggling back and forth over Pip. Counted as
+   * direction reversals, so slowly moving across him is not a tickle.
+   */
+  function detectTickle(x, dx, t) {
+    if (!overPip || drag || Math.abs(dx) < 2) return;
+    const dir = Math.sign(dx);
+    if (tickleDir && dir !== tickleDir) tickleTimes.push(t);
+    tickleDir = dir;
+    tickleTimes = tickleTimes.filter((at) => t - at < TICKLE_WINDOW);
+    if (tickleTimes.length >= TICKLE_REVERSALS && t - lastTickleAt > TICKLE_COOLDOWN) {
+      lastTickleAt = t;
+      tickleTimes = [];
+      hoverSince = 0;
+      petSent = true;   // a tickle is not also a pet
+      notify('pip:gesture', { kind: 'tickle' });
+    }
+  }
+
+  /** Circling: the pointer going round and round him makes him dizzy. */
+  function detectCircle(x, y, t) {
+    if (drag) return;
+    const c = pipCenter();
+    const d = Math.hypot(x - c.x, y - c.y);
+    const reach = SIZE * settings.scale;
+    if (d < reach * 0.35 || d > reach * 1.9 || t - orbitSince > CIRCLE_WINDOW) {
+      orbitAngle = null;
+      orbitTotal = 0;
+      orbitSince = t;
+      if (d < reach * 0.35 || d > reach * 1.9) return;
+    }
+    const a = Math.atan2(y - c.y, x - c.x);
+    if (orbitAngle !== null) {
+      let da = a - orbitAngle;
+      if (da > Math.PI) da -= Math.PI * 2;
+      if (da < -Math.PI) da += Math.PI * 2;
+      if (Math.abs(da) < 1.2) orbitTotal += da;
+    }
+    orbitAngle = a;
+    if (Math.abs(orbitTotal) >= CIRCLE_TURNS * Math.PI * 2 && t - lastCircleAt > 8000) {
+      lastCircleAt = t;
+      orbitTotal = 0;
+      notify('pip:gesture', { kind: 'circle' });
+    }
+  }
+
+  /** Shaking: the carried Pip swung hard back and forth. Once per carry. */
+  function detectShake(v, now) {
+    if (shakeSent || Math.abs(v.vx) < SHAKE_MIN_SPEED) return;
+    const sign = Math.sign(v.vx);
+    if (shakeSign && sign !== shakeSign) shakeTimes.push(now);
+    shakeSign = sign;
+    shakeTimes = shakeTimes.filter((at) => now - at < SHAKE_WINDOW);
+    if (shakeTimes.length >= SHAKE_REVERSALS) {
+      shakeSent = true;
+      notify('pip:gesture', { kind: 'shake' });
+      Particles.spawn(particleList, 'sweat', body.x, body.y - unit() * 16, 2);
+    }
+  }
+
+  /**
+   * A pounce: the pointer creeping along the floor just in front of an idle
+   * Pip. He watches it for a moment first - the butt wiggle is main's call.
+   */
+  function watchForPounce(now, dt) {
+    const ready = pipState === 'idle' && clip === 'idle' && !localClip && body.grounded &&
+      !drag && !body.climbing && cursor.inside && now - lastPounceAt > POUNCE_COOLDOWN;
+    if (!ready) { pounceWatch = 0; return; }
+    const dx = cursor.x - body.x;
+    const above = body.y - cursor.y;
+    const s = settings.scale;
+    const inFront = Math.sign(dx) === body.facing && Math.abs(dx) > 35 * s && Math.abs(dx) < 210 * s;
+    const low = above > -8 * s && above < 70 * s;
+    const speed = Math.hypot(cursor.vx, cursor.vy);
+    const creeping = now - cursor.t < 250 && speed > 10 && speed < 280;
+    if (inFront && low && creeping) pounceWatch += dt;
+    else pounceWatch = Math.max(0, pounceWatch - dt * 2);
+    if (pounceWatch >= POUNCE_WATCH_S) {
+      pounceWatch = 0;
+      lastPounceAt = now;
+      notify('pip:gesture', { kind: 'pounce', x: cursor.x });
+    }
+  }
+
+  /** Launch a pounce (or a hop) when it falls due. */
+  function launchAction(now) {
+    if (!action || now < action.at) return;
+    const a = action;
+    action = null;
+    if (drag || body.climbing) return;
+    if (a.kind === 'pounce') {
+      const reach = typeof a.x === 'number' ? a.x - body.x : body.facing * 120;
+      body.vx = Math.max(-620, Math.min(620, reach * 1.7));
+      body.vy = -520;
+    } else {
+      body.vy = -380;
+    }
+    body.grounded = false;
+    actionUntil = now + 900;
   }
 
   window.addEventListener('mousemove', (e) => {
@@ -968,6 +1233,9 @@
     };
     body.held = true;
     gotoX = null;
+    shakeSent = false;
+    shakeTimes = [];
+    action = null;
     notify('pip:grabbed', {});
     wake();
   });
@@ -1002,7 +1270,20 @@
    * fire. src/main/clicks.js owns that judgement now - it is pure and tested.
    */
   function handleClick(x, y) {
-    notify('pip:click', { x: x, y: y });
+    notify('pip:click', { x: x, y: y, face: onFace(x, y) });
+  }
+
+  /** Is (x, y) on Pip's face? A click there is a boop on the nose. */
+  function onFace(x, y) {
+    const meta = Sprites.FRAME_META[currentFrame];
+    if (!meta || !meta.eyes || !meta.eyes.length) return false;
+    const rect = spriteRect();
+    let col = ((x - rect.left) / rect.width) * SIZE;
+    const row = ((y - rect.top) / rect.height) * SIZE;
+    if (body.facing === -1) col = SIZE - col;
+    const first = meta.eyes[0];
+    const last = meta.eyes[meta.eyes.length - 1];
+    return row >= first.r - 2 && row <= first.r + 12 && col >= first.c - 3 && col <= last.c + 8;
   }
 
   window.addEventListener('contextmenu', (e) => {
@@ -1016,7 +1297,7 @@
    * ---------------------------------------------------------------- */
 
   bridge.on('pip:settings', (s) => {
-    const typeChanged = s.flavor !== settings.flavor;
+    const typeChanged = s.flavor !== settings.flavor || s.effects !== settings.effects;
     settings = Object.assign({}, settings, s);
     // Frames are cached at the art's own size, so only a new type - not a new
     // scale or a new monitor - means composing them again.
@@ -1087,10 +1368,18 @@
     if (pomodoro.running || wasRunning) wake();
   });
 
+  /** A move main decided on: a pounce toward the pointer, or a hop. */
+  bridge.on('pip:action', (p) => {
+    if (!p || !p.kind) return;
+    action = { kind: p.kind, x: p.x, at: performance.now() + Math.max(0, p.delay || 0) };
+    wake();
+  });
+
   bridge.on('pip:goto', (p) => {
     if (!p) return;
     // x:null means "stop chasing" - Pip gives up and goes back to pottering.
     gotoX = typeof p.x === 'number' ? p.x : null;
+    gotoSpeed = typeof p.speed === 'number' ? p.speed : 80;
     wake();
   });
 
@@ -1209,6 +1498,28 @@
           errors.push(flavor + ': ' + (err && err.message));
         }
       }
+      // Every special effect, at every level, through its whole draw path.
+      for (const level of ['full', 'reduced']) {
+        for (const name of Effects.NAMES) {
+          try {
+            settings.effects = level;
+            fx = Effects.create(name, level);
+            currentFrame = 'idle_0';
+            for (let i = 0; i < 12; i++) {
+              lastTick += 90;
+              updateEffects(0.09);
+              drawPip();
+            }
+            fx.onLand(fxInfo(getFrame(currentFrame)), fxSpawn);
+            particleList = Particles.update(particleList, 0.05);
+            Particles.draw(ctx, particleList, unit());
+            particleList = [];
+          } catch (err) {
+            errors.push('effect ' + name + ' (' + level + '): ' + (err && err.message));
+          }
+        }
+      }
+      settings.effects = 'full';
       settings.flavor = 'cherry';
       prerender();
       currentFrame = Sprites.FRAME_NAMES[0];

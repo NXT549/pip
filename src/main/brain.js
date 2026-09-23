@@ -91,6 +91,8 @@ function paceFor(state, mood, hour) {
  *   behavior       {{clip, until}|null}  a running idle behaviour
  *   wander         {{dir, until, moving}}  carried between calls
  *   onBreak        {boolean} a Pomodoro break is running - Pip lounges
+ *   onWork         {boolean} a Pomodoro work block is running - Pip puts his
+ *                  sweatband on and stands with you
  *   quiet          {boolean} quiet mode: no wandering, no chatter
  *   hidden         {boolean}
  *   mood           {number} 0-100
@@ -226,6 +228,11 @@ function decide(input) {
   // Standing still during a Pomodoro break means lounging with the tea.
   if (input.onBreak) {
     return { state: 'idle', clip: 'onbreak', walkDir: 0, walkSpeed: 0, wander: wander };
+  }
+
+  // ...and during a work block, a sweatband and a determined face.
+  if (input.onWork) {
+    return { state: 'idle', clip: 'focus', walkDir: 0, walkSpeed: 0, wander: wander };
   }
 
   return { state: 'idle', clip: 'idle', walkDir: 0, walkSpeed: 0, wander: wander };

@@ -22,6 +22,12 @@
  *   p  prop 2 shade
  *   S  paper             paper, steam, foam
  *   G  metal             grey metal, laptop body, keys
+ *   R  red               popcorn stripes, headbands, berets
+ *   r  red shade
+ *   Q  yellow            hard hats, pencils, coins
+ *   q  yellow shade
+ *   N  screen            laptop screens, gamepads, headphones
+ *   n  glow              the light off a screen
  *
  * Body keys - each Pip type overrides these, so a type is a recolour and a
  * decoration on the SAME frames:
@@ -47,7 +53,8 @@
 const BODY_KEYS = ['B', 'L', 'D', 'd', 'H', 'h', 'F', 'f', 'o', 'X', 'x', 'Y', 'Z'];
 
 /** Keys shared by every Pip and never overridden. */
-const STRUCTURAL_KEYS = ['O', 'E', 'e', 'W', 'K', 'k', 'M', 'T', 'U', 'A', 'a', 'P', 'p', 'S', 'G'];
+const STRUCTURAL_KEYS = ['O', 'E', 'e', 'W', 'K', 'k', 'M', 'T', 'U', 'A', 'a', 'P', 'p', 'S', 'G',
+  'R', 'r', 'Q', 'q', 'N', 'n'];
 
 /**
  * Face ink a very dark type may override, so its eyes still read against
@@ -77,7 +84,13 @@ const BASE = {
   P: '#6cc4f5',
   p: '#3a82c4',
   S: '#f6f1e7',
-  G: '#9aa3b5'
+  G: '#9aa3b5',
+  R: '#e8483c',
+  r: '#a8282e',
+  Q: '#ffd23f',
+  q: '#d9960f',
+  N: '#3b3452',
+  n: '#8ff0cf'
 };
 
 /* ------------------------------------------------------------------ *

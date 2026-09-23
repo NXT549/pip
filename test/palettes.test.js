@@ -20,7 +20,7 @@ const HEX = /^#[0-9a-f]{6}$/;
 test('the documented shape is there', () => {
   assert.deepStrictEqual(Palettes.BODY_KEYS, ['B', 'L', 'D', 'd', 'H', 'h', 'F', 'f', 'o', 'X', 'x', 'Y', 'Z']);
   assert.deepStrictEqual(Palettes.STRUCTURAL_KEYS,
-    ['O', 'E', 'e', 'W', 'K', 'k', 'M', 'T', 'U', 'A', 'a', 'P', 'p', 'S', 'G']);
+    ['O', 'E', 'e', 'W', 'K', 'k', 'M', 'T', 'U', 'A', 'a', 'P', 'p', 'S', 'G', 'R', 'r', 'Q', 'q', 'N', 'n']);
   assert.deepStrictEqual(Palettes.FACE_KEYS, ['E', 'e', 'M']);
   assert.strictEqual(Palettes.TRANSPARENT, '.');
   assert.ok(Palettes.FLAVOR_NAMES.indexOf(Palettes.DEFAULT_FLAVOR) !== -1);
@@ -92,7 +92,7 @@ test('resolve falls back to cherry for anything unknown instead of throwing', ()
 test('isValidKey accepts every palette key and transparent, and nothing else', () => {
   assert.ok(Palettes.isValidKey(Palettes.TRANSPARENT));
   for (const key of Palettes.ALL_KEYS) assert.ok(Palettes.isValidKey(key), key + ' should be valid');
-  for (const bad of ['Q', 'z', ' ', '', '#', 'b', 'q', '1']) {
+  for (const bad of ['V', 'z', ' ', '', '#', 'b', 'v', '1']) {
     assert.ok(!Palettes.isValidKey(bad), '"' + bad + '" should not be valid');
   }
 });

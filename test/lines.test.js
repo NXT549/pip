@@ -15,6 +15,9 @@ const Lines = require('../src/renderer/lines.js');
 
 /** The situation list from ARCHITECTURE.md section 7, verbatim. */
 const EXPECTED_SITUATIONS = [
+  'tickle', 'boop', 'pounce', 'queasy', 'bonk', 'typing_company',
+  'app_code', 'app_video', 'app_music', 'app_design', 'app_writing', 'app_email', 'app_game',
+  'tab_juggling',
   'onboarding_drag', 'onboarding_menu', 'onboarding_flavor', 'onboarding_tray',
   'good_morning', 'welcome_back', 'pet', 'snack', 'click', 'startle', 'annoyed',
   'water_due', 'water_logged', 'pomodoro_done', 'break_start', 'break_over',
