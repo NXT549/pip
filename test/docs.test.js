@@ -43,8 +43,9 @@ function listFiles(dir) {
   for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     if (['node_modules', 'dist'].includes(entry.name)) continue;
     // Hidden folders include .git and .claude/worktrees, whose stale copies
-    // of the code would otherwise keep a renamed name "present".
-    if (entry.isDirectory() && entry.name.startsWith('.')) continue;
+    // of the code would otherwise keep a renamed name "present". .github holds
+    // only CI and templates, which the docs may name.
+    if (entry.isDirectory() && entry.name.startsWith('.') && entry.name !== '.github') continue;
     const rel = dir ? dir + '/' + entry.name : entry.name;
     if (entry.isDirectory()) out.push(rel + '/', ...listFiles(rel));
     else out.push(rel);

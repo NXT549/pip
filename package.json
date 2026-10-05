@@ -6,7 +6,10 @@
   "author": "Pip",
   "license": "MIT",
   "private": true,
-  "main": "main.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
@@ -30,11 +33,7 @@
       "buildResources": "build"
     },
     "files": [
-      "main.js",
-      "preload.js",
       "src/**/*",
-      "settings/**/*",
-      "debug/**/*",
       "assets/**/*",
       "!**/*.md",
       "!**/.DS_Store"

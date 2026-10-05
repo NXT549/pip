@@ -33,7 +33,7 @@ npm test
 
 - All green, every time. `wiring.test.js` and `scope.test.js` catch most
   "added X but forgot Y" mistakes. Read their failure message, since it names the gap.
-- If you changed the renderer, `main.js` or windows and have a display, also
+- If you changed the renderer, `src/main.js` or windows and have a display, also
   run `npm run smoke`. As root, run it as a normal user:
   `su <user> -c 'xvfb-run -a node scripts/smoke.js'`. If you can't, say so.
 - Re-read your own diff once, looking for anything a reviewer would reject.
@@ -53,5 +53,7 @@ npm test
 - Subject: imperative and specific, about 70 chars, and say *what changed for Pip*
   (e.g. `Make a respawn say why Pip's position was invalid`).
 - Body: the cause, the fix, and how it is tested. Plain prose, wrapped at 72 characters.
-- `git push -u origin <branch>`. Open a PR only when asked.
+- `git push -u origin <branch>`. Open a PR only when asked. CI runs `npm test`
+  on every PR and every push to `main`, so a red run there means something
+  was missed locally.
 - Final report: what changed, test result (`# pass N / fail 0`), what you could not verify.

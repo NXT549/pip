@@ -1,0 +1,6 @@
+# Keep LF everywhere, even on a Windows checkout with core.autocrlf on.
+# The tests and the sprite generator compare file text byte for byte.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
