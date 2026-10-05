@@ -55,5 +55,6 @@ npm test
 - Body: the cause, the fix, and how it is tested. Plain prose, wrapped at 72 characters.
 - `git push -u origin <branch>`. Open a PR only when asked. CI runs `npm test`
   on every PR and every push to `main`, so a red run there means something
-  was missed locally.
+  was missed locally. Its macOS job also runs the smoke test from source and
+  against a built Pip.app, which is the only Mac check most changes get.
 - Final report: what changed, test result (`# pass N / fail 0`), what you could not verify.

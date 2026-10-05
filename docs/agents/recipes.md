@@ -54,6 +54,11 @@ clamped). Then add the control to `settings.html` with `id` set to the key, and
 the key to the matching `*_FIELDS` list in `settings.js` (only the checkboxes are tested), plus a
 `storage.test.js` case for bad values.
 
+**Something only one OS does.** Put it in `src/main.js` behind `IS_MAC` or a
+`process.platform` check, never in `src/main/`, and add a `main.test.js`
+scenario that boots with `platform: 'darwin'` (or `'win32'`, the default). Mac
+build settings live in the `mac` block of `package.json`. Describe it in §1.
+
 **New flavour.** Add one entry to `FLAVORS` in `palettes.js` defining exactly
 `B D L F H`, and add it to the §3 list. To hand it out for a season too, add a
 row to `SEASONS` in `seasons.js` (no overlaps; `seasons.test.js` checks) and to
