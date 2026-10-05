@@ -21,8 +21,9 @@ jobs:
       - run: npm test
 
   # The evidence that Pip runs on macOS: the tests, the real app from source,
-  # and freshly built Pip.apps for Apple silicon and Intel (run under
-  # Rosetta), each on a real Mac. The .dmgs it keeps are the release builds.
+  # and a freshly built universal Pip.app run on both chips (its Intel half
+  # under Rosetta), all on a real Mac. The .dmg it keeps is the release
+  # build: one download for every Mac.
   mac:
     runs-on: macos-latest
     steps:
@@ -34,40 +35,46 @@ jobs:
       - run: npm ci
       - name: Smoke test from source
         run: npm run smoke
-      - name: Build Pip.app and the .dmgs
-        run: npm run dist:mac -- --arm64 --x64
+      - name: Build Pip.app and the .dmg
+        run: npm run dist:mac
         env:
           # electron-builder skips signing on pull requests to keep real
           # certificates away from forks. Pip only ever signs ad hoc, and an
           # Apple silicon Mac will not run an app that is not signed at all.
           CSC_FOR_PULL_REQUEST: 'true'
-      - name: Check each app is signed and stays out of the Dock
+      - name: Check the app is universal, signed and stays out of the Dock
         run: |
-          test "$(ls -d dist/mac*/Pip.app | wc -l)" -eq 2
-          for app in dist/mac*/Pip.app; do
-            codesign --verify --deep --strict --verbose=2 "$app"
-            test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist")" = true
-          done
-          for dmg in dist/*.dmg; do hdiutil verify "$dmg"; done
-      - name: Smoke test each packaged app
+          test "$(ls -d dist/mac*/Pip.app | wc -l)" -eq 1
+          app="$(ls -d dist/mac*/Pip.app)"
+          archs="$(lipo -archs "$app/Contents/MacOS/Pip")"
+          echo "$archs"
+          case " $archs " in
+            *" x86_64 "*) ;;
+            *) echo "no Intel half"; exit 1 ;;
+          esac
+          case " $archs " in
+            *" arm64 "*) ;;
+            *) echo "no Apple silicon half"; exit 1 ;;
+          esac
+          codesign --verify --deep --strict --verbose=2 "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist")" = true
+          test "$(ls dist/*.dmg | wc -l)" -eq 1
+          hdiutil verify dist/*.dmg
+      - name: Smoke test the packaged app on both chips
         env:
-          # Rosetta translates the Intel app as it first runs, which can take
-          # longer than the whole smoke test normally gets.
+          # Rosetta translates the Intel half as it first runs, which can
+          # take longer than the whole smoke test normally gets.
           SMOKE_TIMEOUT_MS: '180000'
         run: |
-          for app in dist/mac*/Pip.app; do
-            bin="$app/Contents/MacOS/Pip"
-            lipo -archs "$bin"
-            if [ "$(lipo -archs "$bin")" = x86_64 ]; then
-              # The first launch under Rosetta is translated piece by piece
-              # (the settings window's helper last), slowly enough to trip
-              # the app's own 20 s smoke deadline. Warm it up once, then test.
-              node scripts/smoke.js "$bin" || echo "Rosetta warm-up run finished"
-            fi
-            node scripts/smoke.js "$bin"
-          done
+          bin="$(ls -d dist/mac*/Pip.app)/Contents/MacOS/Pip"
+          node scripts/smoke.js "$bin"
+          # The first launch under Rosetta is translated piece by piece (the
+          # settings window's helper last), slowly enough to trip the app's
+          # own 20 s smoke deadline. Warm it up once, then test.
+          node scripts/smoke.js arch -x86_64 "$bin" || echo "Rosetta warm-up run finished"
+          node scripts/smoke.js arch -x86_64 "$bin"
       - uses: actions/upload-artifact@v4
         with:
           name: Pip-mac
-          path: dist/*.dmg
+          path: dist/Pip-*.dmg
           retention-days: 14

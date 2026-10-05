@@ -33,9 +33,11 @@ There is also **`Pip-Portable-1.2.0.exe`**, a single self-contained file that
 runs without installing anything. The portable build never registers itself to
 launch at login.
 
-On a Mac, `npm run dist:mac` builds **Pip.app** in a `.dmg`: drag it into
-Applications. [docs/SETUP.md](docs/SETUP.md#macos) has the details, including
-what to do when macOS will not open a copy built on another Mac.
+On a Mac there is one file for every Mac, **`Pip-1.2.0-mac.dmg`**: the build is
+universal, so it runs on Apple silicon and on Intel. Open it and drag **Pip**
+into Applications. [docs/SETUP.md](docs/SETUP.md#macos) has the details,
+including what to do when macOS will not open a copy built on another Mac, and
+how to build the `.dmg` yourself with `npm run dist:mac`.
 
 ### First run
 

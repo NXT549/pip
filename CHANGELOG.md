@@ -41,19 +41,22 @@ for each system.
 - `docs/SETUP.md`: step-by-step setup for Windows, macOS and Linux, with
   what does and does not work on each. Windows and macOS are supported;
   Linux is not, and needs XWayland on Wayland desktops.
-- **macOS support.** `npm run dist:mac` builds Pip.app in a `.dmg`, so a
-  Mac can run Pip at real speed instead of only in dev mode. On a Mac he
+- **macOS support.** `npm run dist:mac` builds Pip.app in one universal
+  `.dmg` that runs on both Apple silicon and Intel Macs, so there is a
+  single Mac download and a Mac can run Pip at real speed instead of only
+  in dev mode. On a Mac he
   stays out of the Dock and ⌘-Tab, lives in the menu bar (any click on his
   icon opens his menu), follows you to every Space and over full-screen
   apps, treats Control-click as a right-click, brings his settings window
   to the front, and comes over when you open Pip.app again. His onboarding
   points at the menu bar instead of the tray.
-- CI now also runs on macOS: the tests, the smoke test from source, builds
-  of Pip.app for Apple silicon and Intel with a signature and Info.plist
-  check, and the smoke test against each build (Intel under Rosetta), whose
-  `.dmg`s it keeps for 14 days.
+- CI now also runs on macOS: the tests, the smoke test from source, a
+  universal Pip.app build with an architecture, signature and Info.plist
+  check, and the smoke test against that build on both chips (its Intel
+  half under Rosetta), whose `.dmg` it keeps for 14 days.
 - `scripts/smoke.js` can smoke-test a packaged app: pass the path to its
-  executable.
+  executable, or a whole command, as CI does with
+  `arch -x86_64 <path>`.
 
 ### Fixed
 
