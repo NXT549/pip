@@ -18,9 +18,9 @@ Skip `README.md` unless you need the user-facing behaviour or the "Extending Pip
 | Command | What | Needs |
 |---|---|---|
 | `npm test` | all unit, wiring, scope and main.js tests (~1 s) | Node 22, no install |
-| `npm run smoke` | launches the real app and exercises it | `npm install` + a display |
+| `npm run smoke` | launches the real app and exercises it | `npm install` + a display (`xvfb-run -a` works), not root |
 | `npm run sprites` | regenerate `src/renderer/sprites.js` | — |
-| `npm run dev` | app with work timers ÷60 and the debug panel | `npm install` + a display |
+| `npm run dev` | app with work timers ÷60 and the debug panel | same as smoke |
 
 ## Hard rules
 
@@ -30,5 +30,6 @@ Skip `README.md` unless you need the user-facing behaviour or the "Extending Pip
 - `src/main/*` never imports Electron. Clock, RNG and thresholds are injected.
 - Renderer and page scripts: wrap everything in `(function () { ... })();`, with nothing at top level.
 - Security settings stay: `contextIsolation`, `sandbox`, no `nodeIntegration`, no `remote`.
+  Never add `--no-sandbox`, not even to make smoke run as root.
 - No new runtime dependencies.
 - Add a `CHANGELOG.md` entry for any user-visible change.

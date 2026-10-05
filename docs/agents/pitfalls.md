@@ -1,8 +1,9 @@
 # Pitfalls: each one has shipped before
 
-1. **Shared global scope.** Overlay scripts are plain `<script>` tags. A
-   top-level `function clamp` in one file silently replaces another's. That
-   broke every particle and every wall in 1.0.0 while all unit tests passed.
+1. **Shared global scope.** Overlay scripts are plain `<script>` tags. In
+   1.0.0, a top-level `clamp` and `create` in bubbles.js silently replaced
+   physics.js's and particles.js's. That broke every wall and every particle
+   while all unit tests passed.
    Wrap the file in an IIFE and export via `window.Pip.X` / `module.exports`.
 
 2. **`held` sticks.** `held` outranks everything. Anything that sets it needs
