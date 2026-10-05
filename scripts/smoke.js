@@ -13,6 +13,10 @@
  * instead of the source, as CI does with the Mac app:
  *
  *   node scripts/smoke.js dist/mac-arm64/Pip.app/Contents/MacOS/Pip
+ *
+ * SMOKE_TIMEOUT_MS gives a slow start more than 20 seconds. CI needs it for
+ * the Intel Mac app, which Rosetta translates on its first launch before
+ * Pip's own code runs at all.
  */
 
 'use strict';
@@ -21,7 +25,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const TIMEOUT_MS = 20000;
+const TIMEOUT_MS = Number(process.env.SMOKE_TIMEOUT_MS) || 20000;
 
 const packaged = process.argv[2];
 let command;
@@ -61,6 +65,7 @@ const timer = setTimeout(() => {
   if (finished) return;
   finished = true;
   console.error('\nsmoke: timed out after ' + TIMEOUT_MS / 1000 + 's');
+  if (err.trim()) console.error(err.trim().split('\n').slice(-20).join('\n'));
   try { child.kill(); } catch (e) { /* already gone */ }
   process.exit(1);
 }, TIMEOUT_MS);

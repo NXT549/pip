@@ -50,6 +50,10 @@ jobs:
           done
           for dmg in dist/*.dmg; do hdiutil verify "$dmg"; done
       - name: Smoke test each packaged app
+        env:
+          # Rosetta translates the Intel app on its first launch, which can
+          # take longer than the whole smoke test normally gets.
+          SMOKE_TIMEOUT_MS: '180000'
         run: |
           for app in dist/mac*/Pip.app; do
             lipo -archs "$app/Contents/MacOS/Pip"
