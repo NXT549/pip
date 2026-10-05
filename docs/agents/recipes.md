@@ -53,4 +53,4 @@ the key to the matching `*_FIELDS` list in `settings.js` (untested), plus a
 `storage.test.js` case for bad values.
 
 **New flavour.** Add one entry to `FLAVORS` in `palettes.js` defining exactly
-`B D L F H`. Add it to the §3 list, and bump the hard-coded `6` in `runSmoke` (`main.js`).
+`B D L F H`, and add it to the §3 list.

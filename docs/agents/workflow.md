@@ -34,7 +34,8 @@ npm test
 - All green, every time. `wiring.test.js` and `scope.test.js` catch most
   "added X but forgot Y" mistakes. Read their failure message, since it names the gap.
 - If you changed the renderer, `main.js` or windows and have a display, also
-  run `npm run smoke`. If you can't run it, say so in your summary.
+  run `npm run smoke`. As root, run it as a normal user:
+  `su <user> -c 'xvfb-run -a node scripts/smoke.js'`. If you can't, say so.
 - Re-read your own diff once, looking for anything a reviewer would reject.
 
 ## 5. Document
