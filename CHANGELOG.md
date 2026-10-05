@@ -11,6 +11,9 @@ for each system.
 - The app's own code now all lives under `src/`: `main.js`, `preload.js`,
   `settings/` and `debug/` moved to `src/main.js`, `src/preload.js`,
   `src/settings/` and `src/debug/`. Nothing about how Pip behaves changed.
+- The settings window no longer says Windows: launch at login starts Pip
+  "when you sign in to your computer", and the footer mentions the menu bar
+  as well as the system tray.
 
 ### Added
 
@@ -36,8 +39,20 @@ for each system.
   the workflow, which files each common change touches, and the bugs that
   have already shipped once. `CLAUDE.md` loads it for Claude Code.
 - `docs/SETUP.md`: step-by-step setup for Windows, macOS and Linux, with
-  what does and does not work on each. Windows is the only supported system;
-  macOS is untested and Linux needs XWayland on Wayland desktops.
+  what does and does not work on each. Windows and macOS are supported;
+  Linux is not, and needs XWayland on Wayland desktops.
+- **macOS support.** `npm run dist:mac` builds Pip.app in a `.dmg`, so a
+  Mac can run Pip at real speed instead of only in dev mode. On a Mac he
+  stays out of the Dock and ⌘-Tab, lives in the menu bar (any click on his
+  icon opens his menu), follows you to every Space and over full-screen
+  apps, treats Control-click as a right-click, brings his settings window
+  to the front, and comes over when you open Pip.app again. His onboarding
+  points at the menu bar instead of the tray.
+- CI now also runs on macOS: the tests, the smoke test from source, a build
+  of Pip.app with a signature and Info.plist check, and the smoke test
+  against that build, whose `.dmg` it keeps for 14 days.
+- `scripts/smoke.js` can smoke-test a packaged app: pass the path to its
+  executable.
 
 ### Fixed
 
@@ -56,6 +71,8 @@ for each system.
   channel, npm script or `ARCHITECTURE.md` section that no longer exists.
 - The smoke test counts flavour previews from the palette, so adding a
   flavour no longer fails it.
+- Four `main.test.js` scenarios boot Pip as a Mac: Dock, Spaces, the menu
+  bar click, the onboarding, and opening Pip.app again.
 
 ## 1.1.0
 

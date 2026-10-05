@@ -10,6 +10,7 @@
  *   assets/icon-{16,32,48,64,128,256}.png
  *   assets/tray.png, assets/tray@2x.png
  *   build/icon.ico
+ *   build/icon.png (1024px, which electron-builder turns into the Mac's .icns)
  *
  * Runs automatically as a predist step; also available as `npm run icons`.
  */
@@ -27,6 +28,8 @@ const ROOT = path.join(__dirname, '..');
 const ICON_SIZES = [16, 32, 48, 64, 128, 256];
 /** Windows tray icons are small; 256 in the .ico would just bloat it. */
 const ICO_SIZES = [16, 32, 48, 64, 128, 256];
+/** macOS wants its app icon at 1024px for Retina; 512 is the bare minimum. */
+const MAC_ICON_SIZE = 1024;
 const SOURCE_FRAME = 'idle_0';
 const SOURCE_FLAVOR = 'cherry';
 
@@ -258,6 +261,10 @@ function main() {
   const icoFile = path.join(build, 'icon.ico');
   fs.writeFileSync(icoFile, ico);
   written.push(path.relative(ROOT, icoFile));
+
+  const macFile = path.join(build, 'icon.png');
+  fs.writeFileSync(macFile, encodePNG(resizeToSquare(src, MAC_ICON_SIZE), MAC_ICON_SIZE, MAC_ICON_SIZE));
+  written.push(path.relative(ROOT, macFile));
 
   console.log('icons written from ' + SOURCE_FRAME + ' (' + SOURCE_FLAVOR + '):');
   for (const f of written) console.log('  ' + f.replace(/\\/g, '/'));

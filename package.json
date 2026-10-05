@@ -18,7 +18,9 @@
     "icons": "node scripts/make-icons.js",
     "sprites": "node tools/gen-sprites.js",
     "predist": "node scripts/make-icons.js",
-    "dist": "electron-builder --win --x64"
+    "dist": "electron-builder --win --x64",
+    "predist:mac": "node scripts/make-icons.js",
+    "dist:mac": "electron-builder --mac"
   },
   "devDependencies": {
     "electron": "44.4.3",
@@ -58,6 +60,20 @@
     },
     "portable": {
       "artifactName": "Pip-Portable-${version}.${ext}"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "notarize": false,
+      "extendInfo": {
+        "LSUIElement": true
+      }
+    },
+    "dmg": {
+      "artifactName": "Pip-${version}-${arch}.${ext}"
     }
   }
 }

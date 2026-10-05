@@ -16,6 +16,7 @@ const Lines = require('../src/renderer/lines.js');
 /** The situation list from ARCHITECTURE.md section 7, verbatim. */
 const EXPECTED_SITUATIONS = [
   'onboarding_drag', 'onboarding_menu', 'onboarding_flavor', 'onboarding_tray',
+  'onboarding_menubar',
   'good_morning', 'welcome_back', 'pet', 'snack', 'click', 'startle', 'annoyed',
   'water_due', 'water_logged', 'pomodoro_done', 'break_start', 'break_over',
   'drowsy', 'exhausted', 'late_night', 'bored', 'called', 'dizzy', 'low_mood',

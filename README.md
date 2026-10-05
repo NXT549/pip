@@ -6,7 +6,7 @@ keeps a gentle eye on your breaks, your Pomodoros and whether you have had any
 water lately.
 
 He is a desktop pet, not a productivity nag. He will never block your screen,
-never steal focus, and never appear in Alt+Tab.
+never steal focus, and never appear in Alt+Tab (or the Dock and ⌘-Tab on a Mac).
 
 ---
 
@@ -32,6 +32,10 @@ as any other Windows app.
 There is also **`Pip-Portable-1.2.0.exe`**, a single self-contained file that
 runs without installing anything. The portable build never registers itself to
 launch at login.
+
+On a Mac, `npm run dist:mac` builds **Pip.app** in a `.dmg`: drag it into
+Applications. [docs/SETUP.md](docs/SETUP.md#macos) has the details, including
+what to do when macOS will not open a copy built on another Mac.
 
 ### First run
 
@@ -81,7 +85,8 @@ running in the tray.
 ## Running from source
 
 See [docs/SETUP.md](docs/SETUP.md) for the full walk-through on each
-operating system. A copy run from source is always in dev mode, described
+operating system, including building Pip.app on a Mac with
+`npm run dist:mac`. A copy run from source is always in dev mode, described
 below, so `npm start` and `npm run dev` behave the same.
 
 ```bash

@@ -38,6 +38,14 @@ the browser does, and fails on any top-level declaration.
 `sandbox: true`. `src/preload.js` is the only bridge and exposes exactly one
 global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
 
+**Platforms**: Windows is the main target and macOS is supported. Anything
+only one of them does lives in `src/main.js` behind `IS_MAC` or a
+`process.platform` check, never in `src/main/`. On a Mac, Pip stays out of the
+Dock and Cmd-Tab (`app.dock.hide()` from source, `LSUIElement` in the built
+app), shows on every Space and over full-screen apps, opens his menu on any
+click of the menu bar icon, and treats opening Pip.app again (`activate`) like
+a second launch on Windows (`second-instance`).
+
 ---
 
 ## 2. Module map
@@ -67,8 +75,8 @@ global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
 | `src/debug/` | the dev-mode debug panel: `debug.html`, `debug.js` |
 | `tools/gen-sprites.js` | the sprite composition engine (authoring) |
 | `tools/frame-specs.js` | the pose table (authoring) |
-| `scripts/make-icons.js` | PNG/ICO generation |
-| `scripts/smoke.js` | the smoke test |
+| `scripts/make-icons.js` | PNG/ICO generation, and the 1024px PNG the Mac's `.icns` is built from |
+| `scripts/smoke.js` | the smoke test, of the source or of a packaged app |
 
 ---
 
@@ -274,6 +282,7 @@ Lines.variants(situation) -> string[]
 Every situation has **at least 6 variants**. Situations:
 
 `onboarding_drag` `onboarding_menu` `onboarding_flavor` `onboarding_tray`
+`onboarding_menubar` (said instead of `onboarding_tray` on a Mac)
 `good_morning` `welcome_back` `pet` `snack` `click` `startle` `annoyed`
 `water_due` `water_logged` `pomodoro_done` `break_start` `break_over`
 `drowsy` `exhausted` `late_night` `bored` `called` `dizzy` `low_mood`

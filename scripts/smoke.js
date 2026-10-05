@@ -8,6 +8,11 @@
  * exception, a missing frame, a crash, or 20 seconds of silence - fails.
  *
  *   npm run smoke
+ *
+ * Give it the path to a packaged app's executable to smoke-test the build
+ * instead of the source, as CI does with the Mac app:
+ *
+ *   node scripts/smoke.js dist/mac-arm64/Pip.app/Contents/MacOS/Pip
  */
 
 'use strict';
@@ -18,20 +23,28 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const TIMEOUT_MS = 20000;
 
-let electronPath;
-try {
-  electronPath = require('electron');
-} catch (err) {
-  console.error('electron is not installed - run `npm install` first');
-  process.exit(1);
+const packaged = process.argv[2];
+let command;
+let args;
+
+if (packaged) {
+  command = path.resolve(packaged);
+  args = ['--smoke'];
+} else {
+  try {
+    command = require('electron');
+  } catch (err) {
+    console.error('electron is not installed - run `npm install` first');
+    process.exit(1);
+  }
+  if (typeof command !== 'string') {
+    console.error('could not resolve the electron binary');
+    process.exit(1);
+  }
+  args = [ROOT, '--smoke'];
 }
 
-if (typeof electronPath !== 'string') {
-  console.error('could not resolve the electron binary');
-  process.exit(1);
-}
-
-const child = spawn(electronPath, [ROOT, '--smoke'], {
+const child = spawn(command, args, {
   cwd: ROOT,
   stdio: ['ignore', 'pipe', 'pipe'],
   env: Object.assign({}, process.env, { ELECTRON_ENABLE_LOGGING: '0' })

@@ -19,3 +19,37 @@ jobs:
       # The tests need no install: they use Node's built-in runner and never
       # load Electron (main.test.js fakes it).
       - run: npm test
+
+  # The evidence that Pip runs on macOS: the tests, the real app from source,
+  # and a freshly built Pip.app, each on a real Mac.
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm test
+      - run: npm ci
+      - name: Smoke test from source
+        run: npm run smoke
+      - name: Build Pip.app and the .dmg
+        run: npm run dist:mac
+        env:
+          # electron-builder skips signing on pull requests to keep real
+          # certificates away from forks. Pip only ever signs ad hoc, and an
+          # Apple silicon Mac will not run an app that is not signed at all.
+          CSC_FOR_PULL_REQUEST: 'true'
+      - name: Check the app is signed and stays out of the Dock
+        run: |
+          app=$(ls -d dist/mac*/Pip.app | head -n 1)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist")" = true
+          hdiutil verify dist/*.dmg
+      - name: Smoke test the packaged app
+        run: node scripts/smoke.js "$(ls -d dist/mac*/Pip.app | head -n 1)/Contents/MacOS/Pip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pip-mac
+          path: dist/*.dmg
+          retention-days: 14

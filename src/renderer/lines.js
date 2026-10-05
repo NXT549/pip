@@ -61,6 +61,16 @@
       'If you ever lose me, check the tray.'
     ],
 
+    // The Mac's tray is the menu bar, and a click there always opens the menu.
+    onboarding_menubar: [
+      'See me up in the menu bar? Click me there for the menu.',
+      "That little bean in the menu bar is me too.",
+      "Hide me from the menu bar and I'll wait patiently.",
+      'Everything I do is in my menu bar icon as well.',
+      'The menu bar is my little balcony. Visit any time.',
+      'If you ever lose me, check the menu bar.'
+    ],
+
     good_morning: [
       'Morning! I saved you the good half of the desk.',
       'Good morning! I have been awake for, ooh, four seconds.',
