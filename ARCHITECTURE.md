@@ -10,10 +10,11 @@ quietly diverge.
 ## 1. Processes
 
 **Main** decides *what Pip is doing*. It owns the windows, the tray, the
-polling loops, the power events, persistence and all timing. Every
-state-deciding module in `src/main/` is a pure CommonJS module with **no
-Electron imports** — the clock, the RNG and all thresholds are injected. That
-is what makes them directly testable with `node --test`.
+polling loops, the power events, persistence and all timing. The Electron
+glue is `src/main.js`, the app's entry point. Every state-deciding module in
+`src/main/` is a pure CommonJS module with **no Electron imports** — the
+clock, the RNG and all thresholds are injected. That is what makes them
+directly testable with `node --test`.
 
 **Renderer** decides *what that looks like*. Modules in `src/renderer/` are
 plain scripts loaded with `<script>` tags. Every one of them ends with:
@@ -34,7 +35,7 @@ the unit tests, which each `require()` a module into its own scope, all passed.
 the browser does, and fails on any top-level declaration.
 
 **Security**: `contextIsolation: true`, `nodeIntegration: false`,
-`sandbox: true`. `preload.js` is the only bridge and exposes exactly one
+`sandbox: true`. `src/preload.js` is the only bridge and exposes exactly one
 global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
 
 ---
@@ -43,8 +44,8 @@ global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
 
 | File | Owns |
 |---|---|
-| `main.js` | lifecycle, overlay/settings/debug windows, tray, polling, power events, IPC, single instance, login item |
-| `preload.js` | the `window.pipBridge` allow-list |
+| `src/main.js` | lifecycle, overlay/settings/debug windows, tray, polling, power events, IPC, single instance, login item |
+| `src/preload.js` | the `window.pipBridge` allow-list |
 | `src/main/brain.js` | state priority resolution |
 | `src/main/pomodoro.js` | work/break blocks |
 | `src/main/reminders.js` | water reminders, activity + break accounting |
@@ -62,6 +63,8 @@ global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
 | `src/renderer/bubbles.js` | speech bubble layout and lifetime |
 | `src/renderer/lines.js` | all speech text |
 | `src/renderer/renderer.js` | drawing, hit testing, pointer, wiring |
+| `src/settings/` | the settings window: `settings.html`, `settings.js`, `settings.css` |
+| `src/debug/` | the dev-mode debug panel: `debug.html`, `debug.js` |
 | `tools/gen-sprites.js` | the sprite composition engine (authoring) |
 | `tools/frame-specs.js` | the pose table (authoring) |
 | `scripts/make-icons.js` | PNG/ICO generation |
@@ -283,7 +286,7 @@ line for that situation, which `pick` must not return again.
 
 ## 8. IPC channels
 
-Only these names exist. `preload.js` enforces the list.
+Only these names exist. `src/preload.js` enforces the list.
 
 ### main → renderer
 

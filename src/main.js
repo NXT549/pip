@@ -18,19 +18,19 @@ const {
   nativeImage, powerMonitor, Notification
 } = require('electron');
 
-const logger = require('./src/main/logger.js');
-const { createStorage, cleanPatch } = require('./src/main/storage.js');
-const brain = require('./src/main/brain.js');
-const pomodoro = require('./src/main/pomodoro.js');
-const reminders = require('./src/main/reminders.js');
-const mood = require('./src/main/mood.js');
-const clicks = require('./src/main/clicks.js');
-const seasons = require('./src/main/seasons.js');
-const history = require('./src/main/history.js');
-const Lines = require('./src/renderer/lines.js');
-const Bubbles = require('./src/renderer/bubbles.js');
-const Animations = require('./src/renderer/animations.js');
-const Palettes = require('./src/renderer/palettes.js');
+const logger = require('./main/logger.js');
+const { createStorage, cleanPatch } = require('./main/storage.js');
+const brain = require('./main/brain.js');
+const pomodoro = require('./main/pomodoro.js');
+const reminders = require('./main/reminders.js');
+const mood = require('./main/mood.js');
+const clicks = require('./main/clicks.js');
+const seasons = require('./main/seasons.js');
+const history = require('./main/history.js');
+const Lines = require('./renderer/lines.js');
+const Bubbles = require('./renderer/bubbles.js');
+const Animations = require('./renderer/animations.js');
+const Palettes = require('./renderer/palettes.js');
 
 /* ------------------------------------------------------------------ *
  * Flags and paths
@@ -423,7 +423,7 @@ function runApp(store) {
         body: body,
         // A NativeImage rather than a path: in the packaged app the path points
         // inside app.asar, which Windows' notification service cannot open.
-        icon: nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon-256.png')),
+        icon: nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon-256.png')),
         silent: false
       }).show();
     } catch (err) {
@@ -706,7 +706,7 @@ function runApp(store) {
     // renderer so it can tell when the cursor is over Pip's actual pixels.
     overlay.setIgnoreMouseEvents(true, { forward: true });
     overlay.setMenu(null);
-    overlay.loadFile(path.join(__dirname, 'src', 'renderer', 'overlay.html'));
+    overlay.loadFile(path.join(__dirname, 'renderer', 'overlay.html'));
 
     overlay.once('ready-to-show', () => {
       if (!store.get('hidden')) overlay.showInactive();
@@ -776,7 +776,7 @@ function runApp(store) {
       minWidth: 520,
       minHeight: 520,
       title: 'Pip settings',
-      icon: path.join(__dirname, 'assets', 'icon-256.png'),
+      icon: path.join(__dirname, '..', 'assets', 'icon-256.png'),
       autoHideMenuBar: true,
       show: false,
       webPreferences: {
@@ -850,7 +850,7 @@ function runApp(store) {
    * ---------------------------------------------------------------- */
 
   function trayImage() {
-    const img = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray.png'));
+    const img = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png'));
     return img.isEmpty() ? nativeImage.createEmpty() : img;
   }
 

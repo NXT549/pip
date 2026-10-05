@@ -126,11 +126,13 @@ sprite validation and palette completeness. It also runs:
 - a **scope check** that loads the overlay's scripts into one shared global
   scope, the way the browser does, and fails if any of them can overwrite
   another's names;
-- **`test/main.test.js`**, which runs the real `main.js` against a fake
+- **`test/main.test.js`**, which runs the real `src/main.js` against a fake
   Electron on a mock clock and drives it through the renderer's own IPC
   channels. It covers clicks, drops, reactions, quiet mode, waking from sleep,
   crash recovery and settings validation. That glue is where most of Pip's bugs
   have lived.
+
+CI runs `npm test` on every pull request and every push to `main`.
 
 `npm run smoke` launches the **real app** with `--smoke`: it draws its first
 frame, plays every animation clip in every flavour offscreen, checks that every
@@ -166,16 +168,19 @@ a plain script that attaches to `window.Pip` *and* exports itself under
 `require()` in tests.
 
 ```
-main.js            lifecycle, windows, tray, polling, power events, IPC
-preload.js         the only bridge; an explicit channel allow-list
+src/main.js        lifecycle, windows, tray, polling, power events, IPC
+src/preload.js     the only bridge; an explicit channel allow-list
 src/main/          brain, pomodoro, reminders, mood, clicks, storage, logger
 src/renderer/      palettes, sprites, animations, physics, particles,
                    bubbles, lines, renderer
-settings/          the settings window
-debug/             the dev-mode debug panel
+src/settings/      the settings window
+src/debug/         the dev-mode debug panel
+assets/            app and tray icons (generated)
+build/             installer resources for electron-builder
 tools/             the sprite authoring tools
 scripts/           icon generation, the smoke test
 test/              the unit tests
+.github/           CI, issue and PR templates
 ```
 
 `ARCHITECTURE.md` is the full contract: every exported signature, every IPC
@@ -234,7 +239,7 @@ that file is the contract — `held > sleeping > celebrating > thirsty >
 exhausted > drowsy > reaction > idle` — so put your case where it belongs in
 that chain. If it is triggered by something the renderer notices (the pointer,
 a collision), send it up on one of the `renderer → main` channels listed in
-`ARCHITECTURE.md` §8 and add the channel to the allow-list in `preload.js`.
+`ARCHITECTURE.md` §8 and add the channel to the allow-list in `src/preload.js`.
 
 ### Add a speech line
 

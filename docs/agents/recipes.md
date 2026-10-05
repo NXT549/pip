@@ -4,8 +4,8 @@
 
 | Area | File | Test | Contract |
 |---|---|---|---|
-| windows, tray, polling, IPC glue | `main.js` | `main.test.js` (fake Electron) | §1, §8 |
-| bridge allow-list | `preload.js` | `wiring.test.js` | §8 |
+| windows, tray, polling, IPC glue | `src/main.js` | `main.test.js` (fake Electron) | §1, §8 |
+| bridge allow-list | `src/preload.js` | `wiring.test.js` | §8 |
 | which state wins | `src/main/brain.js` | `brain.test.js`, `liveness.test.js` | §4 |
 | click / double / spree | `src/main/clicks.js` | `clicks.test.js` | §8 `pip:click` |
 | pomodoro | `src/main/pomodoro.js` | `pomodoro.test.js` | §10 |
@@ -21,28 +21,28 @@
 | particles | `src/renderer/particles.js` | `wiring.test.js`, smoke | §6 |
 | speech text | `src/renderer/lines.js` | `lines.test.js` | §7 |
 | drawing, hit test, pointer | `src/renderer/renderer.js` | smoke | §9, §11 |
-| settings UI | `settings/` | `storage.test.js`, `wiring.test.js`, smoke | §8 settings |
+| settings UI | `src/settings/` | `storage.test.js`, `wiring.test.js`, smoke | §8 settings |
 
 ## Common changes
 
 **New animation.** Add poses to `tools/frame-specs.js` (preview with
 `node tools/gen-sprites.js --preview name_0`), run `npm run sprites`, add the clip to
 `animations.js`, then make something play it. An idle behaviour goes in a
-`pickBehavior()` pool and a reaction is a `react('clip')` call, both in `main.js`.
+`pickBehavior()` pool and a reaction is a `react('clip')` call, both in `src/main.js`.
 A state clip goes in `brain.js`, and a renderer-only clip in `renderer.js`.
 `wiring.test.js` only checks that the name is quoted somewhere. Add the name to
 the §5 list and to `REQUIRED_CLIPS` in `test/sprites.test.js`.
 
-**New reaction.** Call `react('clip')` from the `main.js` code that triggers it.
+**New reaction.** Call `react('clip')` from the `src/main.js` code that triggers it.
 `brain.js` does not change. A new *state* changes `STATE_PRIORITY`, so also update
-§4, `brain.test.js` and `STATES` in `debug/debug.js`. Never reorder the chain.
+§4, `brain.test.js` and `STATES` in `src/debug/debug.js`. Never reorder the chain.
 
-**New IPC channel.** Add it to `INBOUND`/`OUTBOUND` in `preload.js`, then the
+**New IPC channel.** Add it to `INBOUND`/`OUTBOUND` in `src/preload.js`, then the
 sender, the receiver (`ipcMain.on` in main) and the §8 table. `wiring.test.js`
 catches a missing side, but the §8 table is up to you.
 
 **New menu/tray action.** Add a `case` to `doAction` and a `buildMenu()` item in
-`main.js` (or a `data-action=` button in `settings.html`, or both). Then add it to
+`src/main.js` (or a `data-action=` button in `settings.html`, or both). Then add it to
 the action list in `test/wiring.test.js` and to §8. The test only checks the `case`.
 
 **New speech situation.** Give it 6+ variants in `lines.js` and at least one caller.

@@ -26,7 +26,7 @@ const Animations = require('../src/renderer/animations.js');
 const Lines = require('../src/renderer/lines.js');
 const { localDateKey } = require('../src/main/reminders.js');
 
-const MAIN = require.resolve('../main.js');
+const MAIN = require.resolve('../src/main.js');
 const START = new Date('2026-09-21T10:00:00').getTime();
 const MINUTE = 60000;
 

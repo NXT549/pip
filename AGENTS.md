@@ -13,11 +13,27 @@ process decides *what* Pip does; the renderer decides *how it looks*.
 
 Skip `README.md` unless you need the user-facing behaviour or the "Extending Pip" steps.
 
+## Layout
+
+| Path | What lives there |
+|---|---|
+| `src/main.js` | the Electron entry point: windows, tray, polling, IPC glue |
+| `src/preload.js` | the only bridge between the pages and main |
+| `src/main/` | pure logic modules, with no Electron imports |
+| `src/renderer/` | the overlay page and its scripts |
+| `src/settings/` | the settings window |
+| `src/debug/` | the dev-mode debug panel |
+| `tools/` | sprite authoring: `frame-specs.js` → `sprites.js` |
+| `scripts/` | icon generation and the smoke test |
+| `build/` | electron-builder resources: `installer.nsh`, and the generated `build/icon.ico` |
+| `test/` | `node --test` suites, one per module plus wiring, scope, docs, main |
+| `.github/` | CI (runs `npm test`), issue and PR templates |
+
 ## Commands
 
 | Command | What | Needs |
 |---|---|---|
-| `npm test` | all unit, wiring, scope, docs and main.js tests (~1 s) | Node 22, no install |
+| `npm test` | all unit, wiring, scope, docs and main.js tests (~1 s), also run by CI on every PR and push to `main` | Node 22, no install |
 | `npm run smoke` | launches the real app and exercises it | `npm install` + a display (`xvfb-run -a` works), not root |
 | `npm run sprites` | regenerate `src/renderer/sprites.js` | — |
 | `npm run dev` | app with work timers ÷60 and the debug panel | same as smoke |

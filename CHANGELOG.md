@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- The app's own code now all lives under `src/`: `main.js`, `preload.js`,
+  `settings/` and `debug/` moved to `src/main.js`, `src/preload.js`,
+  `src/settings/` and `src/debug/`. Nothing about how Pip behaves changed.
+
 ### Added
 
 - **Seasonal flavours.** Three new flavours, bubblegum, pumpkin and candy
@@ -14,6 +20,14 @@
   of tallies instead of only today's, and draws them as a Monday-to-Sunday
   grid tinted in his flavour, with this week's Pomodoros, water and active
   days and your current day streak.
+- CI on GitHub Actions runs `npm test` on every pull request and every push
+  to `main`.
+- Issue templates for bug reports and ideas, a pull request template with
+  the checks from the agent workflow, and a `LICENSE` file for the MIT
+  licence `package.json` already declared.
+- `.nvmrc`, an `engines` field, `.editorconfig` and `.gitattributes`, so
+  every checkout uses Node 22, two-space indents and LF line endings, even on
+  Windows with `core.autocrlf` on.
 - `AGENTS.md` and `docs/agents/`: a short guide for coding agents covering
   the workflow, which files each common change touches, and the bugs that
   have already shipped once. `CLAUDE.md` loads it for Claude Code.

@@ -20,10 +20,10 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
-const mainSrc = read('main.js');
+const mainSrc = read('src/main.js');
 const rendererSrc = read('src/renderer/renderer.js');
 const brainSrc = read('src/main/brain.js');
-const preloadSrc = read('preload.js');
+const preloadSrc = read('src/preload.js');
 const allSrc = mainSrc + rendererSrc + brainSrc;
 
 const Animations = require('../src/renderer/animations.js');
@@ -105,7 +105,7 @@ test('every shared menu action has a handler', () => {
       'doAction has no case for ' + action);
   }
   // ...and every button in the settings window names a real action.
-  const settingsHtml = read('settings/settings.html');
+  const settingsHtml = read('src/settings/settings.html');
   const used = [...settingsHtml.matchAll(/data-action="([^"]+)"/g)].map((m) => m[1]);
   for (const action of used) {
     assert.ok(actions.includes(action),
@@ -123,14 +123,14 @@ test('the overlay loads every renderer module it uses', () => {
 
 test('no module is left with a TODO or a stub', () => {
   const files = [
-    'main.js', 'preload.js',
+    'src/main.js', 'src/preload.js',
     'src/main/brain.js', 'src/main/pomodoro.js', 'src/main/reminders.js',
     'src/main/mood.js', 'src/main/clicks.js', 'src/main/storage.js', 'src/main/logger.js',
     'src/main/seasons.js', 'src/main/history.js',
     'src/renderer/renderer.js', 'src/renderer/physics.js', 'src/renderer/particles.js',
     'src/renderer/bubbles.js', 'src/renderer/lines.js', 'src/renderer/animations.js',
     'src/renderer/palettes.js',
-    'settings/settings.js', 'debug/debug.js'
+    'src/settings/settings.js', 'src/debug/debug.js'
   ];
   for (const file of files) {
     const src = read(file);
