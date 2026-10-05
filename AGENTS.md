@@ -32,7 +32,7 @@ Skip `README.md` unless you need the user-facing behaviour or the "Extending Pip
 - Security settings stay: `contextIsolation`, `sandbox`, no `nodeIntegration`, no `remote`.
   Never add `--no-sandbox`, not even to make smoke run as root.
 - No new runtime dependencies.
-- Add a `CHANGELOG.md` entry for any user-visible change.
+- Add a `CHANGELOG.md` entry for any user-visible change, and for new tests or checks.
 - These docs stay current: if your change makes anything here or in `docs/agents/`
   wrong, fix it in the same commit. `test/docs.test.js` catches renamed files,
   names, commands and § numbers, but not a description that is no longer true.
