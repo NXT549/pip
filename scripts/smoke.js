@@ -19,9 +19,9 @@
  *
  *   node scripts/smoke.js arch -x86_64 dist/mac-universal/Pip.app/Contents/MacOS/Pip
  *
- * SMOKE_TIMEOUT_MS gives a slow start more than 20 seconds. CI needs it for
- * the Intel half of the Mac app, which Rosetta translates on its first
- * launch before Pip's own code runs at all.
+ * SMOKE_TIMEOUT_MS gives a slow run more than 20 seconds, both here and in
+ * the app's own deadline. CI needs it for the Intel half of the Mac app,
+ * which Rosetta translates as it runs.
  */
 
 'use strict';

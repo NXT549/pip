@@ -56,7 +56,9 @@ for each system.
   half under Rosetta), whose `.dmg` it keeps for 14 days.
 - `scripts/smoke.js` can smoke-test a packaged app: pass the path to its
   executable, or a whole command, as CI does with
-  `arch -x86_64 <path>`.
+  `arch -x86_64 <path>`. `SMOKE_TIMEOUT_MS` raises its 20 second deadline,
+  and the app's own, for a run under Rosetta; two new tests in
+  `test/main.test.js` check that deadline.
 
 ### Fixed
 

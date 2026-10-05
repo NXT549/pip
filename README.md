@@ -152,8 +152,9 @@ CI runs `npm test` on every pull request and every push to `main`.
 frame, plays every animation clip in every flavour offscreen, checks that every
 particle kind actually paints pixels and that the walls hold, opens and closes
 the settings window, and exits 0. Any exception, or twenty seconds of silence,
-fails it. This is the check that proves Pip actually runs, as opposed to merely
-compiling.
+fails it (`SMOKE_TIMEOUT_MS` allows longer, for a machine that is emulating
+another chip). This is the check that proves Pip actually runs, as opposed to
+merely compiling.
 
 ### Building the installers
 

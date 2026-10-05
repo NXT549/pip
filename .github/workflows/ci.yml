@@ -61,18 +61,13 @@ jobs:
           test "$(ls dist/*.dmg | wc -l)" -eq 1
           hdiutil verify dist/*.dmg
       - name: Smoke test the packaged app on both chips
-        env:
-          # Rosetta translates the Intel half as it first runs, which can
-          # take longer than the whole smoke test normally gets.
-          SMOKE_TIMEOUT_MS: '180000'
         run: |
           bin="$(ls -d dist/mac*/Pip.app)/Contents/MacOS/Pip"
           node scripts/smoke.js "$bin"
-          # The first launch under Rosetta is translated piece by piece (the
-          # settings window's helper last), slowly enough to trip the app's
-          # own 20 s smoke deadline. Warm it up once, then test.
-          node scripts/smoke.js arch -x86_64 "$bin" || echo "Rosetta warm-up run finished"
-          node scripts/smoke.js arch -x86_64 "$bin"
+          # Rosetta translates the Intel half as it runs, a minute or more
+          # before Pip's own code starts and slowly after that, so both the
+          # smoke script and the app get far longer than their usual 20 s.
+          SMOKE_TIMEOUT_MS=300000 node scripts/smoke.js arch -x86_64 "$bin"
       - uses: actions/upload-artifact@v4
         with:
           name: Pip-mac
