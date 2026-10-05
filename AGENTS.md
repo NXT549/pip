@@ -17,7 +17,7 @@ Skip `README.md` unless you need the user-facing behaviour or the "Extending Pip
 
 | Command | What | Needs |
 |---|---|---|
-| `npm test` | all unit, wiring, scope and main.js tests (~1 s) | Node 22, no install |
+| `npm test` | all unit, wiring, scope, docs and main.js tests (~1 s) | Node 22, no install |
 | `npm run smoke` | launches the real app and exercises it | `npm install` + a display (`xvfb-run -a` works), not root |
 | `npm run sprites` | regenerate `src/renderer/sprites.js` | — |
 | `npm run dev` | app with work timers ÷60 and the debug panel | same as smoke |
@@ -33,3 +33,6 @@ Skip `README.md` unless you need the user-facing behaviour or the "Extending Pip
   Never add `--no-sandbox`, not even to make smoke run as root.
 - No new runtime dependencies.
 - Add a `CHANGELOG.md` entry for any user-visible change.
+- These docs stay current: if your change makes anything here or in `docs/agents/`
+  wrong, fix it in the same commit. `test/docs.test.js` catches renamed files,
+  names, commands and § numbers, but not a description that is no longer true.

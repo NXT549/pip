@@ -44,6 +44,7 @@ npm test
   (Fixed / Hardening / Tests / Added).
 - Contract changed → `ARCHITECTURE.md`.
 - New extension pattern → one line in `recipes.md`.
+- Anything in `AGENTS.md` or `docs/agents/` now wrong → fix it here.
 
 ## 6. Commit and hand off
 
