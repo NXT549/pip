@@ -31,6 +31,9 @@
 - `AGENTS.md` and `docs/agents/`: a short guide for coding agents covering
   the workflow, which files each common change touches, and the bugs that
   have already shipped once. `CLAUDE.md` loads it for Claude Code.
+- `docs/SETUP.md`: step-by-step setup for Windows, macOS and Linux, with
+  what does and does not work on each. Windows is the only supported system;
+  macOS is untested and Linux needs XWayland on Wayland desktops.
 
 ### Fixed
 
