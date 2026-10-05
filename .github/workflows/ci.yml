@@ -21,7 +21,8 @@ jobs:
       - run: npm test
 
   # The evidence that Pip runs on macOS: the tests, the real app from source,
-  # and a freshly built Pip.app, each on a real Mac.
+  # and freshly built Pip.apps for Apple silicon and Intel (run under
+  # Rosetta), each on a real Mac. The .dmgs it keeps are the release builds.
   mac:
     runs-on: macos-latest
     steps:
@@ -33,21 +34,27 @@ jobs:
       - run: npm ci
       - name: Smoke test from source
         run: npm run smoke
-      - name: Build Pip.app and the .dmg
-        run: npm run dist:mac
+      - name: Build Pip.app and the .dmgs
+        run: npm run dist:mac -- --arm64 --x64
         env:
           # electron-builder skips signing on pull requests to keep real
           # certificates away from forks. Pip only ever signs ad hoc, and an
           # Apple silicon Mac will not run an app that is not signed at all.
           CSC_FOR_PULL_REQUEST: 'true'
-      - name: Check the app is signed and stays out of the Dock
+      - name: Check each app is signed and stays out of the Dock
         run: |
-          app=$(ls -d dist/mac*/Pip.app | head -n 1)
-          codesign --verify --deep --strict --verbose=2 "$app"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist")" = true
-          hdiutil verify dist/*.dmg
-      - name: Smoke test the packaged app
-        run: node scripts/smoke.js "$(ls -d dist/mac*/Pip.app | head -n 1)/Contents/MacOS/Pip"
+          test "$(ls -d dist/mac*/Pip.app | wc -l)" -eq 2
+          for app in dist/mac*/Pip.app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist")" = true
+          done
+          for dmg in dist/*.dmg; do hdiutil verify "$dmg"; done
+      - name: Smoke test each packaged app
+        run: |
+          for app in dist/mac*/Pip.app; do
+            lipo -archs "$app/Contents/MacOS/Pip"
+            node scripts/smoke.js "$app/Contents/MacOS/Pip"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: Pip-mac
