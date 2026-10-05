@@ -49,6 +49,7 @@ global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
 | `src/main/pomodoro.js` | work/break blocks |
 | `src/main/reminders.js` | water reminders, activity + break accounting |
 | `src/main/mood.js` | the hidden 0–100 mood value |
+| `src/main/clicks.js` | telling a click, double-click and poking spree apart |
 | `src/main/storage.js` | JSON persistence |
 | `src/main/logger.js` | rotating file log |
 | `src/renderer/palettes.js` | the palette and the flavours |
