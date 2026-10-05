@@ -28,6 +28,7 @@ const clicks = require('./src/main/clicks.js');
 const Lines = require('./src/renderer/lines.js');
 const Bubbles = require('./src/renderer/bubbles.js');
 const Animations = require('./src/renderer/animations.js');
+const Palettes = require('./src/renderer/palettes.js');
 
 /* ------------------------------------------------------------------ *
  * Flags and paths
@@ -1404,10 +1405,11 @@ function runApp(store) {
               .executeJavaScript('document.querySelectorAll(".flavor canvas").length', true)
               .then((count) => {
                 try { win.close(); } catch (err) { /* already gone */ }
-                if (count !== 6) {
-                  return fail('settings rendered ' + count + ' flavour previews, expected 6');
+                const expected = Palettes.FLAVOR_NAMES.length;
+                if (count !== expected) {
+                  return fail('settings rendered ' + count + ' flavour previews, expected ' + expected);
                 }
-                process.stdout.write('SMOKE OK settings window rendered 6 flavour previews\n');
+                process.stdout.write('SMOKE OK settings window rendered ' + expected + ' flavour previews\n');
                 quitting = true;
                 app.exit(0);
               })
