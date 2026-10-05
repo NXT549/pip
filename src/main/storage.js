@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const Palettes = require('../renderer/palettes.js');
+const History = require('./history.js');
 
 /** Everything Pip remembers, and what it falls back to. */
 const DEFAULTS = {
@@ -30,6 +31,7 @@ const DEFAULTS = {
   notifications: true,
   launchAtLogin: true,
   compatibilityMode: false,
+  seasonal: true,             // wear the seasonal flavour in its season
 
   // work habits, all in minutes
   pomodoroWork: 25,
@@ -49,6 +51,13 @@ const DEFAULTS = {
   lastGoodMorning: '',        // local YYYY-MM-DD, so it survives a restart
   lastLateNightNudge: 0,
 
+  // the seasonal flavour Pip was last handed - see src/main/seasons.js
+  season: {
+    key: '',                  // e.g. 'halloween-2026'; '' when none
+    flavor: '',
+    previous: ''              // what to change back into afterwards
+  },
+
   // pomodoro survives a restart by storing when the block started
   pomodoro: {
     phase: 'off',             // off | work | break | longBreak
@@ -62,7 +71,10 @@ const DEFAULTS = {
     pomodoros: 0,
     water: 0,
     longestStreakMs: 0
-  }
+  },
+
+  // finished days, oldest first - see src/main/history.js
+  history: []
 };
 
 /**
@@ -87,7 +99,7 @@ const CHOICES = {
   activityLevel: ['calm', 'normal', 'hyper']
 };
 
-const TOGGLES = ['notifications', 'launchAtLogin', 'compatibilityMode'];
+const TOGGLES = ['notifications', 'launchAtLogin', 'compatibilityMode', 'seasonal'];
 
 /** The keys the settings window may change. Everything else is main's own state. */
 const USER_KEYS = Object.keys(CHOICES).concat(Object.keys(NUMBER_LIMITS), TOGGLES);
@@ -121,12 +133,16 @@ function cleanPatch(patch) {
   return out;
 }
 
-/** Repair loaded settings in place: anything unusable goes back to its default. */
+/**
+ * Repair loaded settings in place: anything unusable goes back to its default.
+ * The history rows are repaired one by one, so one bad day costs only itself.
+ */
 function sanitize(data) {
   for (const key of USER_KEYS) {
     const value = cleanValue(key, data[key]);
     data[key] = value === undefined ? clone(DEFAULTS[key]) : value;
   }
+  data.history = History.clean(data.history);
   return data;
 }
 

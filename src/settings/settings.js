@@ -23,7 +23,7 @@
     'drowsyAfter', 'exhaustedAfter', 'waterInterval'
   ];
   const SELECT_FIELDS = ['petSize', 'activityLevel'];
-  const TOGGLE_FIELDS = ['notifications', 'launchAtLogin', 'compatibilityMode'];
+  const TOGGLE_FIELDS = ['notifications', 'launchAtLogin', 'compatibilityMode', 'seasonal'];
 
   let current = null;
 
@@ -182,16 +182,85 @@
       if (el) el.checked = !!s[key];
     }
     markFlavor(s.flavor);
+    renderSeason(s);
 
     document.getElementById('statPomodoros').textContent = today.pomodoros || 0;
     document.getElementById('statWater').textContent = today.water || 0;
     document.getElementById('statStreak').textContent = formatStreak(today.longestStreakMs);
     document.getElementById('statMood').textContent = moodWord(today.mood);
+    renderHistory(payload.history, s.flavor);
 
     // The buttons toggle, so they say what they will do next.
     label('btnPomodoro', payload.pomodoroRunning ? 'Stop Pomodoro' : 'Start Pomodoro');
     label('btnQuiet', payload.quiet ? 'End quiet mode' : 'Quiet for 1 hour');
     label('btnVisible', payload.hidden ? 'Show Pip' : 'Hide Pip');
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Streak calendar
+   * ---------------------------------------------------------------- */
+
+  const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  function plural(n, one, many) {
+    return n + ' ' + (n === 1 ? one : many);
+  }
+
+  /** 'Wed 1 Oct' for a local YYYY-MM-DD key. */
+  function formatDay(key) {
+    const parts = key.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2])
+      .toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  function dayTitle(day) {
+    if (day.future) return formatDay(day.date);
+    const bits = [plural(day.pomodoros, 'Pomodoro', 'Pomodoros'), plural(day.water, 'glass', 'glasses')];
+    if (day.longestStreakMs >= 60000) bits.push('longest stretch ' + formatStreak(day.longestStreakMs));
+    return formatDay(day.date) + (day.today ? ' (today)' : '') + ': ' + bits.join(', ');
+  }
+
+  function renderHistory(h, flavor) {
+    const host = document.getElementById('calendar');
+    if (!host || !h || !Array.isArray(h.days)) return;
+    if (Palettes) host.style.setProperty('--bean', Palettes.resolve(flavor).B);
+
+    document.getElementById('weekPomodoros').textContent = h.week.pomodoros;
+    document.getElementById('weekWater').textContent = h.week.water;
+    document.getElementById('weekDays').textContent = h.week.activeDays + ' of 7';
+    document.getElementById('dayStreak').textContent = plural(h.streak, 'day', 'days');
+
+    host.textContent = '';
+    for (const name of WEEKDAYS) {
+      const el = document.createElement('div');
+      el.className = 'weekday';
+      el.textContent = name;
+      host.appendChild(el);
+    }
+    for (const day of h.days) {
+      const el = document.createElement('div');
+      el.className = 'day lv' + day.level +
+        (day.today ? ' is-today' : '') + (day.future ? ' is-future' : '');
+      el.title = dayTitle(day);
+      el.setAttribute('role', 'img');
+      el.setAttribute('aria-label', el.title);
+      host.appendChild(el);
+    }
+  }
+
+  /** While Pip wears a seasonal flavour, say so, and what he goes back to. */
+  function renderSeason(s) {
+    const el = document.getElementById('seasonNote');
+    if (!el) return;
+    const season = s.season || {};
+    const wearing = s.seasonal && season.key && s.flavor === season.flavor;
+    el.hidden = !wearing;
+    if (!wearing) return;
+    const back = season.previous && season.previous !== season.flavor
+      ? ' He goes back to ' + season.previous + ' when it ends.'
+      : '';
+    el.textContent = 'Pip is in ' + season.flavor + ' for the season.' + back +
+      ' Pick any flavor to change him now.';
   }
 
   function label(id, text) {

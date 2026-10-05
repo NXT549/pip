@@ -280,3 +280,46 @@ test('the settings window offers exactly the ranges and choices main accepts', (
     assert.deepStrictEqual(options, CHOICES[key], key + ' choices differ');
   }
 });
+
+test('the settings window has a checkbox for every toggle main accepts', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'settings', 'settings.html'), 'utf8');
+  const toggles = USER_KEYS.filter((k) => typeof DEFAULTS[k] === 'boolean');
+  assert.ok(toggles.includes('seasonal'));
+  for (const key of toggles) {
+    assert.ok(new RegExp('<input type="checkbox" id="' + key + '">').test(html),
+      'settings.html has no checkbox for ' + key);
+  }
+});
+
+test('a hand-edited history loses its bad rows, not its good ones', (t) => {
+  const dir = tempDir(t);
+  writeData(dir, {
+    history: [
+      { date: '2026-09-20', pomodoros: 3, water: 2, longestStreakMs: 600000 },
+      { date: 'last tuesday', pomodoros: 99 },
+      null,
+      { date: '2026-09-21', pomodoros: -1, water: 'lots' }
+    ]
+  });
+
+  const data = createStorage(dir, fakeLog()).load();
+
+  assert.deepStrictEqual(data.history, [
+    { date: '2026-09-20', pomodoros: 3, water: 2, longestStreakMs: 600000 },
+    { date: '2026-09-21', pomodoros: 0, water: 0, longestStreakMs: 0 }
+  ]);
+  writeData(dir, { history: { not: 'a list' } });
+  assert.deepStrictEqual(createStorage(dir, fakeLog()).load().history, []);
+});
+
+test('seasonal flavours are on by default, and a junk value leaves them on', (t) => {
+  const dir = tempDir(t);
+  writeData(dir, { seasonal: 'please', season: 'pumpkin' });
+
+  const data = createStorage(dir, fakeLog()).load();
+
+  assert.strictEqual(data.seasonal, true);
+  assert.deepStrictEqual(data.season, DEFAULTS.season);
+  assert.deepStrictEqual(cleanPatch({ seasonal: false, season: { key: 'x' } }), { seasonal: false },
+    'the window may switch seasons off, but not write the season state');
+});

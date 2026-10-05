@@ -126,6 +126,7 @@ test('no module is left with a TODO or a stub', () => {
     'src/main.js', 'src/preload.js',
     'src/main/brain.js', 'src/main/pomodoro.js', 'src/main/reminders.js',
     'src/main/mood.js', 'src/main/clicks.js', 'src/main/storage.js', 'src/main/logger.js',
+    'src/main/seasons.js', 'src/main/history.js',
     'src/renderer/renderer.js', 'src/renderer/physics.js', 'src/renderer/particles.js',
     'src/renderer/bubbles.js', 'src/renderer/lines.js', 'src/renderer/animations.js',
     'src/renderer/palettes.js',
