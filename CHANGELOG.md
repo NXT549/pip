@@ -48,9 +48,10 @@ for each system.
   apps, treats Control-click as a right-click, brings his settings window
   to the front, and comes over when you open Pip.app again. His onboarding
   points at the menu bar instead of the tray.
-- CI now also runs on macOS: the tests, the smoke test from source, a build
-  of Pip.app with a signature and Info.plist check, and the smoke test
-  against that build, whose `.dmg` it keeps for 14 days.
+- CI now also runs on macOS: the tests, the smoke test from source, builds
+  of Pip.app for Apple silicon and Intel with a signature and Info.plist
+  check, and the smoke test against each build (Intel under Rosetta), whose
+  `.dmg`s it keeps for 14 days.
 - `scripts/smoke.js` can smoke-test a packaged app: pass the path to its
   executable.
 
