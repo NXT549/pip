@@ -15,7 +15,7 @@ never steal focus, and never appear in Alt+Tab.
 Building the installer yourself, or running Pip from source on Windows,
 macOS or Linux, is covered step by step in [docs/SETUP.md](docs/SETUP.md).
 
-1. Run **`Pip-Setup-1.1.0.exe`**.
+1. Run **`Pip-Setup-1.2.0.exe`**.
 2. Windows will almost certainly show a blue **"Windows protected your PC"**
    box. This is SmartScreen reacting to an installer that has not been
    code-signed — signing certificates cost money and this one is unsigned.
@@ -29,7 +29,7 @@ macOS or Linux, is covered step by step in [docs/SETUP.md](docs/SETUP.md).
 To remove Pip: **Settings → Apps → Installed apps → Pip → Uninstall**, the same
 as any other Windows app.
 
-There is also **`Pip-Portable-1.1.0.exe`**, a single self-contained file that
+There is also **`Pip-Portable-1.2.0.exe`**, a single self-contained file that
 runs without installing anything. The portable build never registers itself to
 launch at login.
 
@@ -154,7 +154,7 @@ compiling.
 npm run dist
 ```
 
-Produces `dist/Pip-Setup-1.1.0.exe` and `dist/Pip-Portable-1.1.0.exe`. Icons are
+Produces `dist/Pip-Setup-1.2.0.exe` and `dist/Pip-Portable-1.2.0.exe`. Icons are
 regenerated automatically first.
 
 ---
