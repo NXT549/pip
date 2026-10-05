@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
+
+Pip dresses up for the season and remembers your last four weeks. The code
+also moved under `src/`, and the repo gained CI, templates and a setup guide
+for each system.
 
 ### Changed
 

@@ -41,7 +41,7 @@ npm test
 ## 5. Document
 
 - Behaviour a user would notice, or a new test or check → `CHANGELOG.md`,
-  under `## Unreleased` at the top (create it if missing; 1.1.0 is released),
+  under `## Unreleased` at the top (create it if missing; 1.2.0 is released),
   in a matching `###` group (Fixed / Hardening / Tests / Added).
 - Contract changed → `ARCHITECTURE.md`.
 - New extension pattern → one line in `recipes.md`.
