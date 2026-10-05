@@ -265,7 +265,7 @@ test('every user setting has a default and a rule', () => {
 test('the settings window offers exactly the ranges and choices main accepts', () => {
   // The window clamps before sending and main clamps on receipt. If the two
   // drift apart, a value the window allows is silently changed by main.
-  const html = fs.readFileSync(path.join(__dirname, '..', 'settings', 'settings.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'settings', 'settings.html'), 'utf8');
   for (const key of Object.keys(NUMBER_LIMITS)) {
     const input = html.match(new RegExp('<input type="number" id="' + key + '"[^>]*>'));
     assert.ok(input, 'settings.html has no number field for ' + key);

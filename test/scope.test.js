@@ -39,8 +39,8 @@ const OVERLAY_MODULES = scriptsOf('src/renderer/overlay.html')
 /** Every script any of Pip's three pages loads. */
 const ALL_PAGE_SCRIPTS = [...new Set([
   ...scriptsOf('src/renderer/overlay.html'),
-  ...scriptsOf('settings/settings.html'),
-  ...scriptsOf('debug/debug.html')
+  ...scriptsOf('src/settings/settings.html'),
+  ...scriptsOf('src/debug/debug.html')
 ])];
 
 /** A browser-ish global scope shared by every script run in it. */
