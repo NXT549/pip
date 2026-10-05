@@ -44,10 +44,11 @@ function emitter(target) {
  *
  * @param {object} t        the node:test context
  * @param {object} [opts]   {dev: boolean, data: object saved before boot,
- *                          start: the clock's starting time}
+ *                          start: the clock's starting time,
+ *                          platform: process.platform as main.js sees it}
  */
 async function boot(t, opts) {
-  const o = Object.assign({ dev: false, data: {}, start: START }, opts);
+  const o = Object.assign({ dev: false, data: {}, start: START, platform: 'win32' }, opts);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pip-main-'));
   const userData = o.dev ? path.join(root, 'Pip-dev') : root;
   fs.mkdirSync(userData, { recursive: true });
@@ -69,6 +70,8 @@ async function boot(t, opts) {
     windows: [],
     menus: [],
     errors: [],
+    trays: [],
+    calls: [],           // Electron calls only some platforms make, by name
     userData: userData
   };
 
@@ -95,6 +98,7 @@ async function boot(t, opts) {
       h.windows.push(this);
     }
     setAlwaysOnTop() {}
+    setVisibleOnAllWorkspaces(visible, options) { this.allSpaces = { visible: visible, options: options }; }
     setIgnoreMouseEvents(ignore) { this.ignoringMouse = ignore; }
     setMenu() {}
     loadFile() {}
@@ -112,7 +116,7 @@ async function boot(t, opts) {
   }
 
   class FakeTray {
-    constructor() { emitter(this); }
+    constructor() { emitter(this); h.trays.push(this); }
     setToolTip() {}
     setContextMenu(menu) { h.menus.push(menu); }
     isDestroyed() { return false; }
@@ -130,7 +134,9 @@ async function boot(t, opts) {
       isPackaged: !o.dev,
       getPath: (name) => paths[name] || root,
       setPath: (name, value) => { paths[name] = value; },
-      setAppUserModelId() {},
+      setAppUserModelId: () => h.calls.push('setAppUserModelId'),
+      focus: () => h.calls.push('focus'),
+      dock: { hide: () => h.calls.push('dock.hide') },
       requestSingleInstanceLock: () => true,
       disableHardwareAcceleration() {},
       whenReady: () => Promise.resolve(),
@@ -183,11 +189,15 @@ async function boot(t, opts) {
     if (parent && parent.filename === MAIN && request === './src/main/logger.js') return silentLogger;
     return load.apply(this, arguments);
   };
+  // main.js reads the platform once, as it loads.
+  const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: o.platform, configurable: true });
   try {
     delete require.cache[MAIN];
     require(MAIN);
   } finally {
     Module._load = load;
+    Object.defineProperty(process, 'platform', realPlatform);
   }
 
   t.after(() => {
@@ -487,5 +497,55 @@ test('switching seasonal flavours off changes Pip straight back', async (t) => {
   // ...and he stays that way, rather than being handed pumpkin again.
   h.tick(15000);
   assert.strictEqual(h.saved().flavor, 'blueberry');
+  h.assertHealthy();
+});
+
+test('on a Mac, Pip stays out of the Dock and follows you across Spaces', async (t) => {
+  const h = await boot(t, { platform: 'darwin' });
+  assert.ok(h.calls.includes('dock.hide'), 'Pip showed up in the Dock and in Cmd-Tab');
+  assert.ok(!h.calls.includes('setAppUserModelId'), 'a Windows-only call was made on a Mac');
+  assert.deepStrictEqual(h.overlay.allSpaces,
+    { visible: true, options: { visibleOnFullScreen: true, skipTransformProcessType: true } },
+    'Pip was left behind on one Space; without skipping the transform he is back in the Dock');
+
+  // A click on a menu bar icon opens its menu. It must not also hide Pip.
+  h.trays[0].emit('click');
+  assert.strictEqual(h.saved().hidden, false, 'clicking the menu bar icon hid Pip');
+
+  // He opens his settings in front of you, not behind the app you are in.
+  h.fire('settings:action', { action: 'settings' });
+  assert.ok(h.calls.includes('focus'), 'the settings window opened behind everything');
+  h.assertHealthy();
+});
+
+test('on Windows the tray click still hides Pip, and nothing Mac-only runs', async (t) => {
+  const h = await boot(t);
+  assert.ok(h.calls.includes('setAppUserModelId'));
+  assert.ok(!h.calls.includes('dock.hide'));
+  assert.strictEqual(h.overlay.allSpaces, undefined);
+  h.trays[0].emit('click');
+  assert.strictEqual(h.saved().hidden, true);
+  h.assertHealthy();
+});
+
+test('on a Mac the onboarding points at the menu bar, not the tray', async (t) => {
+  const h = await boot(t, { platform: 'darwin', data: { onboarded: false } });
+  h.tick(20000);
+  const said = h.said();
+  assert.ok(said.some((line) => Lines.variants('onboarding_menubar').includes(line)),
+    'the Mac onboarding never mentioned the menu bar');
+  assert.ok(!said.some((line) => Lines.variants('onboarding_tray').includes(line)),
+    'a Mac has no system tray to send anyone to');
+  h.assertHealthy();
+});
+
+test('opening Pip.app again on a Mac brings him over, even from hiding', async (t) => {
+  const h = await boot(t, { platform: 'darwin', data: { hidden: true } });
+  h.appEvents.emit('activate', {}, false);
+  h.tick(200);
+  assert.strictEqual(h.saved().hidden, false, 'Pip stayed hidden');
+  assert.strictEqual(h.lastState().clip, 'wave');
+  h.tick(Animations.clipDuration('wave') + 200);
+  assert.ok(h.sent.some((m) => m[0] === 'pip:goto' && m[1].x !== null), 'Pip never came over');
   h.assertHealthy();
 });

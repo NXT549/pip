@@ -39,6 +39,7 @@ const Palettes = require('./renderer/palettes.js');
 const IS_SMOKE = process.argv.includes('--smoke');
 const IS_DEV = process.argv.includes('--dev') || (!app.isPackaged && !IS_SMOKE);
 const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
+const IS_MAC = process.platform === 'darwin';
 
 /**
  * Dev runs compress every work timer by 60x so a 25 minute block takes 25s.
@@ -57,7 +58,9 @@ if (IS_DEV) {
   app.setPath('userData', path.join(app.getPath('appData'), 'Pip-smoke'));
 }
 
-app.setAppUserModelId('com.pip.desktopbuddy');
+// Windows only: it names Pip's notifications. Electron documents it for
+// win32 alone, so it is not called anywhere else.
+if (process.platform === 'win32') app.setAppUserModelId('com.pip.desktopbuddy');
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -702,6 +705,13 @@ function runApp(store) {
     });
 
     overlay.setAlwaysOnTop(true, 'floating');
+    if (IS_MAC) {
+      // A Mac keeps a window on the Space it opened on, and off every
+      // full-screen app. Pip is a pet, not a document: he comes along. The
+      // process transform is skipped because it would put him back in the
+      // Dock, which he has already left.
+      overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    }
     // Click-through by default. `forward` keeps mousemove flowing to the
     // renderer so it can tell when the cursor is over Pip's actual pixels.
     overlay.setIgnoreMouseEvents(true, { forward: true });
@@ -764,7 +774,16 @@ function runApp(store) {
     }
   }
 
+  /**
+   * Out of the Dock, Pip is never the active app on a Mac, so a window he
+   * opens would land behind whatever you were using. Ask to come forward.
+   */
+  function bringForward() {
+    if (IS_MAC) app.focus({ steal: true });
+  }
+
   function openSettings() {
+    bringForward();
     if (settingsWin && !settingsWin.isDestroyed()) {
       settingsWin.show();
       settingsWin.focus();
@@ -795,6 +814,7 @@ function runApp(store) {
 
   function openDebug() {
     if (!IS_DEV) return null;
+    bringForward();
     if (debugWin && !debugWin.isDestroyed()) {
       debugWin.show();
       debugWin.focus();
@@ -885,7 +905,9 @@ function runApp(store) {
     tray = new Tray(trayImage());
     tray.setToolTip('Pip');
     tray.setContextMenu(buildMenu());
-    tray.on('click', () => doAction('toggle-visible'));
+    // In a Mac's menu bar any click opens the menu, as every other icon there
+    // does. Hiding Pip on the same click would make him vanish every time.
+    if (!IS_MAC) tray.on('click', () => doAction('toggle-visible'));
   }
 
   function refreshMenu() {
@@ -1140,7 +1162,8 @@ function runApp(store) {
    * ---------------------------------------------------------------- */
 
   const ONBOARDING = [
-    'onboarding_drag', 'onboarding_menu', 'onboarding_flavor', 'onboarding_tray'
+    'onboarding_drag', 'onboarding_menu', 'onboarding_flavor',
+    IS_MAC ? 'onboarding_menubar' : 'onboarding_tray'
   ];
 
   function runOnboarding() {
@@ -1406,11 +1429,12 @@ function runApp(store) {
 
   /**
    * Launch at login is on by default, but only ever registered for a real
-   * installed build - never from a dev run and never from the portable exe,
-   * which would point the shortcut at wherever the file happened to be.
+   * installed build - never from a dev run, never from a smoke test of the
+   * packaged app, and never from the portable exe, which would point the
+   * shortcut at wherever the file happened to be.
    */
   function applyLoginItem() {
-    if (!app.isPackaged || IS_PORTABLE || IS_DEV) return;
+    if (!app.isPackaged || IS_PORTABLE || IS_DEV || IS_SMOKE) return;
     try {
       app.setLoginItemSettings({
         openAtLogin: !!store.get('launchAtLogin'),
@@ -1467,8 +1491,8 @@ function runApp(store) {
    * Boot
    * ---------------------------------------------------------------- */
 
-  app.on('second-instance', () => {
-    // Launching Pip again just brings him over, rather than opening a copy.
+  /** Launching Pip again just brings him over, rather than opening a copy. */
+  function comeOver() {
     if (store.get('hidden')) doAction('toggle-visible');
     if (overlay && !overlay.isDestroyed()) {
       overlay.showInactive();
@@ -1478,7 +1502,12 @@ function runApp(store) {
     // wave before a single frame of it is seen.
     startBehavior('wave');
     setTimeout(() => { if (!quitting) callPip(); }, Animations.clipDuration('wave'));
-  });
+  }
+
+  app.on('second-instance', comeOver);
+  // A Mac never starts a second copy: opening Pip.app again, from Finder,
+  // Launchpad or Spotlight, re-activates the running one instead.
+  app.on('activate', () => { if (overlay && !overlay.isDestroyed()) comeOver(); });
 
   // Closing a window must never quit Pip; only the Quit item does.
   app.on('window-all-closed', () => { /* deliberately empty */ });
@@ -1500,6 +1529,10 @@ function runApp(store) {
   });
 
   app.whenReady().then(() => {
+    // Pip lives on the desktop and in the menu bar, not in the Dock or in
+    // Cmd-Tab. The packaged app says so in its Info.plist (LSUIElement); this
+    // covers running from source. It must happen before any window opens.
+    if (IS_MAC && app.dock) app.dock.hide();
     // Recover a Pomodoro that was running when Pip was last closed.
     store.set({ pomodoro: pomodoro.restore(store.get('pomodoro'), now(), pomodoroCfg()) });
     // Without a baseline, decay never starts and mood sits at its default

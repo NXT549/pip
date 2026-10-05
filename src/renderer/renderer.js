@@ -37,6 +37,8 @@
   const STARTLE_SPEED = 1400;      // DIP/s
   const STARTLE_RANGE = 130;       // DIP
   const STARTLE_COOLDOWN = 6000;
+  /** On a Mac, Control-click is a right-click. */
+  const IS_MAC = /Mac/.test(navigator.platform);
   /** Eye tracking kicks in inside this radius. */
   const LOOK_RANGE = 220;
 
@@ -914,7 +916,8 @@
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return;
+    // A Control-click also raises the menu, so it must not pet or grab him too.
+    if (e.button !== 0 || (IS_MAC && e.ctrlKey)) return;
     if (!hitTest(e.clientX, e.clientY)) return;
     e.preventDefault();
     stopClimb();
