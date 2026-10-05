@@ -44,11 +44,11 @@
     ],
 
     onboarding_flavor: [
-      "I come in six flavours. Cherry is just the default.",
+      "I come in lots of flavours. Cherry is just the default.",
       'Fancy a different flavour? They are all in Settings.',
       "Lime me. Or grape me. I'm not fussy.",
       "You can repaint me any time. I won't take it personally.",
-      'Six flavours, one bean. Pick a favourite.',
+      'So many flavours, one bean. Pick a favourite.',
       'Blueberry me and I might match your wallpaper.'
     ],
 
@@ -274,6 +274,16 @@
       "I'll keep it down. Promise.",
       'Silent running.',
       'Zipping it. Mmmph.'
+    ],
+
+    season_start: [
+      'New season, new coat of jelly! Do you like it?',
+      'I dressed up for the season. Do I look festive?',
+      'Seasonal bean, reporting for duty.',
+      'Limited edition bean! Only available for a while.',
+      "It's a seasonal flavour. Very fancy. Very me.",
+      "Not your thing? Settings will change me back, no hard feelings.",
+      { t: 'Feeling extra sweet in this one.', mood: [60, 100] }
     ],
 
     battery_low: [

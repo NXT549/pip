@@ -4,12 +4,33 @@
 
 ### Added
 
+- **Seasonal flavours.** Three new flavours, bubblegum, pumpkin and candy
+  cane, pickable all year. With the new **Seasonal flavors** setting (on by
+  default) Pip wears bubblegum for 1 to 14 February, pumpkin in October and
+  candy cane in December, says so once, and changes back afterwards. A
+  flavour you pick mid-season is kept, and turning the setting off changes
+  him straight back.
+- **A four-week streak calendar** in Settings. Pip now keeps the last 70 days
+  of tallies instead of only today's, and draws them as a Monday-to-Sunday
+  grid tinted in his flavour, with this week's Pomodoros, water and active
+  days and your current day streak.
 - `AGENTS.md` and `docs/agents/`: a short guide for coding agents covering
   the workflow, which files each common change touches, and the bugs that
   have already shipped once. `CLAUDE.md` loads it for Claude Code.
 
+### Fixed
+
+- A glass of water logged in the seconds after midnight went on the day
+  before, and then the Today panel kept showing yesterday's numbers until
+  the next midnight. The day now rolls over on the stored date itself.
+
 ### Tests
 
+- `test/seasons.test.js` and `test/history.test.js` cover the season rules
+  and the calendar, including week boundaries and daylight-saving changes.
+  `main.test.js` runs Pip across midnight and across the end of October.
+- `storage.test.js` checks that every toggle has a checkbox in the settings
+  window, and that a hand-edited history loses only its bad rows.
 - `test/docs.test.js` fails when the agent guide names a file, function,
   channel, npm script or `ARCHITECTURE.md` section that no longer exists.
 - The smoke test counts flavour previews from the palette, so adding a

@@ -55,6 +55,16 @@ his day.
 When Pip trots into the edge of the screen he sometimes climbs it, hangs for a
 moment and drops off. Otherwise he turns round and carries on.
 
+He dresses up for the time of year: bubblegum for the first fortnight of
+February, pumpkin all October and candy cane all December. He changes back to
+your flavour afterwards. Pick any flavour mid-season and he keeps it, or turn
+**Seasonal flavors** off in Settings.
+
+Settings also keeps a **four-week calendar**: one square per day, lit when you
+finished a Pomodoro or logged a glass of water and brighter the more Pomodoros
+you did, with this week's totals and your current day streak. Hover a square
+for that day's numbers.
+
 The tray icon's right-click menu and Pip's right-click menu are the same:
 Start/Stop Pomodoro, I drank water, Feed Pip, Call Pip, Quiet mode for 1 hour,
 Show/Hide Pip, Reset position, Settings, Quit. Left-clicking the tray icon
@@ -106,7 +116,8 @@ npm run smoke
 `npm test` runs the unit tests on Node's built-in runner — state priority, work
 accumulation and break resets, Pomodoro transitions and restart recovery, water
 scheduling and the midnight reset, mood, click patterns, physics, storage and
-settings validation, sprite validation and palette completeness. It also runs:
+settings validation, seasonal flavours, the streak calendar's day history,
+sprite validation and palette completeness. It also runs:
 
 - a **wiring check** that fails if any animation clip, speech situation or
   particle kind is unreachable, if an IPC channel is known to only one side, or
@@ -241,7 +252,8 @@ bubblegum: { B: '#f06ec0', D: '#b23a86', L: '#ff9ad6', F: '#8f2668', H: '#ffffff
 ```
 
 That is all. Flavours are palette swaps over the same frames, so it appears in
-the settings picker with a live preview automatically. Only the body keys
+the settings picker with a live preview automatically. To hand it out for a
+season as well, add a row to `SEASONS` in `src/main/seasons.js`. Only the body keys
 (`B D L F H`) may be overridden — the outline, eyes, blush and mouth are shared
 so Pip stays recognisably Pip.
 
@@ -268,6 +280,11 @@ greets you. There is no setting for this — the five-minute threshold is fixed,
 and the activity level only changes how often he wanders, not when he sleeps.
 If it bothers you, hide him from the tray while you watch.
 
+**Pip changed colour on his own.**
+That is a seasonal flavour, and he changes back when the season ends. To keep
+your own flavour, pick it again in Settings (he keeps it for the rest of the
+season), or turn off **Seasonal flavors**.
+
 **Pip is in the way.**
 Drag him somewhere else, or **Hide Pip** from the tray. **Quiet mode for 1
 hour** keeps him around but stops the wandering and the speech bubbles.
@@ -283,7 +300,7 @@ folder, and he will run first-time onboarding again next launch.
 
 ---
 
-## Five ways to grow Pip
+## Three ways to grow Pip
 
 1. **Friends.** Let a second jellybean spawn after a long streak — two Pips
    that notice each other, trot over, and sit together. Most of the work is
@@ -295,12 +312,6 @@ folder, and he will run first-time onboarding again next launch.
 3. **Focus-aware reactions.** Watch the foreground window title and let Pip
    respond to *what* you are doing rather than just whether you are doing it —
    a tiny hard hat when a build is running, a cheer when a long compile ends.
-4. **A week view.** The Today panel is a single day. Keeping the daily rows and
-   drawing a small pixel-art streak calendar would turn Pip from a reminder
-   into something you can actually look back at.
-5. **Seasonal flavours.** Flavours are four hex codes. A date-aware picker
-   could quietly hand out a candy-cane Pip in December or a pumpkin one in
-   October, without touching a single frame of art.
 
 ---
 

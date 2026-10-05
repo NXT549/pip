@@ -19,7 +19,7 @@ const EXPECTED_SITUATIONS = [
   'good_morning', 'welcome_back', 'pet', 'snack', 'click', 'startle', 'annoyed',
   'water_due', 'water_logged', 'pomodoro_done', 'break_start', 'break_over',
   'drowsy', 'exhausted', 'late_night', 'bored', 'called', 'dizzy', 'low_mood',
-  'high_mood', 'quiet_on', 'battery_low', 'on_battery'
+  'high_mood', 'quiet_on', 'season_start', 'battery_low', 'on_battery'
 ];
 
 const MOODS = [0, 10, 25, 40, 60, 75, 90, 100];

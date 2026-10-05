@@ -51,6 +51,8 @@ global, `window.pipBridge`, with a channel allow-list. Never use `remote`.
 | `src/main/mood.js` | the hidden 0–100 mood value |
 | `src/main/clicks.js` | telling a click, double-click and poking spree apart |
 | `src/main/storage.js` | JSON persistence |
+| `src/main/seasons.js` | which seasonal flavour Pip wears, and when |
+| `src/main/history.js` | past days, and the streak calendar built from them |
 | `src/main/logger.js` | rotating file log |
 | `src/renderer/palettes.js` | the palette and the flavours |
 | `src/renderer/sprites.js` | every frame, as literal data (generated) |
@@ -91,7 +93,9 @@ nothing else. `STRUCTURAL_KEYS = ['O','E','W','K','M','A']` are shared by every
 flavour, so Pip's face, outline and blush never change.
 
 Flavours, in display order: `cherry` (default), `lime`, `blueberry`, `lemon`,
-`grape`, `licorice`.
+`grape`, `licorice`, then the seasonal ones: `bubblegum`, `pumpkin`, `candycane`.
+Seasonal flavours are pickable all year. `src/main/seasons.js` also hands them
+out for their season (see §10).
 
 ```js
 Palettes.resolve(flavorName) -> { O:'#rrggbb', B:'#rrggbb', ... }  // 11 keys
@@ -270,7 +274,7 @@ Every situation has **at least 6 variants**. Situations:
 `good_morning` `welcome_back` `pet` `snack` `click` `startle` `annoyed`
 `water_due` `water_logged` `pomodoro_done` `break_start` `break_over`
 `drowsy` `exhausted` `late_night` `bored` `called` `dizzy` `low_mood`
-`high_mood` `quiet_on` `battery_low` `on_battery`
+`high_mood` `quiet_on` `season_start` `battery_low` `on_battery`
 
 `mood` is 0–100; `hour` is the local hour 0–23. `last` is the previously shown
 line for that situation, which `pick` must not return again.
@@ -315,7 +319,7 @@ Only these names exist. `preload.js` enforces the list.
 
 | Channel | Direction | Payload |
 |---|---|---|
-| `settings:get` | invoke | → `{ settings, today, pomodoroRunning, quiet, hidden }` |
+| `settings:get` | invoke | → `{ settings, today, history, pomodoroRunning, quiet, hidden }` — `history` is `history.summarize()`: `{ days, week, streak }`, see §10 |
 | `settings:set` | send | `{ patch }` — partial settings. Main keeps only the user-editable keys (`storage.USER_KEYS`) and clamps every value (`storage.cleanPatch`) |
 | `settings:action` | send | `{ action }` — see the action list below |
 | `settings:update` | main → window | same shape as `settings:get` |
@@ -368,6 +372,36 @@ intervals, so system sleep can never skew a Pomodoro or a work streak.
 | water | every 45 active minutes (configurable); daily count resets at local midnight |
 | pomodoro | 25 / 5, long break 15 after every 4 (all configurable) |
 | sleeping | you have been away ≥ 5 min |
+| day roll | at local midnight `today` is filed into `history` (kept 70 days) and reset |
+| seasons | Valentine's (1–14 Feb) `bubblegum`, October `pumpkin`, December `candycane` |
+
+**History.** `history` in `pip-data.json` is a list of finished days,
+`{ date, pomodoros, water, longestStreakMs }`, oldest first. Empty days are not
+stored. The settings window's calendar is four Monday-to-Sunday weeks ending
+with this one. A day *counts* (lights up, keeps the streak) with at least one
+finished Pomodoro or one glass of water; its brightness is
+`1 + min(3, floor(pomodoros / 2))`. The streak runs back from today, or from
+yesterday while today has nothing yet.
+
+```js
+history.archive(list, today) -> list
+history.clean(list) -> list            // repairs rows loaded from disk
+history.level(day) -> 0..4
+history.summarize(list, today, now) -> { days, week: { pomodoros, water, activeDays }, streak }
+```
+
+**Seasons.** With the `seasonal` setting on, the first day of a season
+changes Pip into its flavour and remembers the one he wore in
+`season: { key, flavor, previous }`. When it ends, or the setting goes off, he
+changes back, but only if he is still wearing the seasonal flavour: a flavour
+the user picked mid-season is kept. `key` carries the year, so a season is
+handed out once per year. Main checks at startup and at every day roll, and
+says `season_start` once Pip is awake and onboarded.
+
+```js
+seasons.seasonAt(ts) -> { name, flavor, from, to } | null
+seasons.step({ flavor, seasonal, season }, ts) -> { flavor, season, event: 'start'|'end'|null }
+```
 
 **Dev mode** divides every *work* timer above by 60 and makes idle behaviours
 more frequent. Animation lengths (reactions, behaviours, the chase) are never

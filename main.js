@@ -25,6 +25,8 @@ const pomodoro = require('./src/main/pomodoro.js');
 const reminders = require('./src/main/reminders.js');
 const mood = require('./src/main/mood.js');
 const clicks = require('./src/main/clicks.js');
+const seasons = require('./src/main/seasons.js');
+const history = require('./src/main/history.js');
 const Lines = require('./src/renderer/lines.js');
 const Bubbles = require('./src/renderer/bubbles.js');
 const Animations = require('./src/renderer/animations.js');
@@ -154,7 +156,8 @@ function runApp(store) {
     seq: 0,                  // bumped per reaction/behaviour so a repeat replays
     wasQuiet: false,
     lastPomodoroSentAt: 0,
-    lastWelcomeAt: 0
+    lastWelcomeAt: 0,
+    seasonNews: false        // a seasonal flavour started and is not yet announced
   };
 
   let cursorTimer = null;
@@ -440,6 +443,7 @@ function runApp(store) {
 
     store.set({ pomodoro: res.state });
     if (res.finishedPhase === 'work') {
+      rollDayIfNeeded();
       const today = store.get('today');
       store.set({ today: Object.assign({}, today, { pomodoros: today.pomodoros + 1 }) });
       // Never celebrate for longer than half the break it announces: a dev
@@ -517,6 +521,7 @@ function runApp(store) {
     if (!world.asleep) {
       maybeGoodMorning();
       maybeLateNight();
+      maybeAnnounceSeason();
       const cfg = { waterInterval: store.get('waterInterval') * TIME_SCALE };
       const due = reminders.waterDue(world.reminders, now(), cfg);
       if (due && !world.thirsty) {
@@ -540,18 +545,53 @@ function runApp(store) {
     }
   }
 
+  /**
+   * At local midnight, file the day that ended into the history and start a
+   * fresh one. This compares the stored day itself. It used to wait for the
+   * reminders' own day to change, and logging water changes that quietly
+   * first - so a glass drunk just after midnight went on yesterday's count,
+   * and yesterday's tallies then stayed up as today's until the next midnight.
+   */
   function rollDayIfNeeded() {
-    const rolled = reminders.rollDay(world.reminders, now());
-    if (rolled !== world.reminders) {
-      world.reminders = rolled;
-      const key = reminders.localDateKey(now());
-      const today = store.get('today');
-      if (today.date !== key) {
-        store.set({ today: { date: key, pomodoros: 0, water: 0, longestStreakMs: 0 } });
-        pushSettings();
-        logger.info('daily stats rolled over to ' + key);
-      }
-    }
+    world.reminders = reminders.rollDay(world.reminders, now());
+    const key = reminders.localDateKey(now());
+    const today = store.get('today');
+    if (today.date === key) return;
+    store.set({
+      history: history.archive(store.get('history'), today),
+      today: { date: key, pomodoros: 0, water: 0, longestStreakMs: 0 }
+    });
+    pushSettings();
+    logger.info('daily stats rolled over to ' + key);
+    // Seasons start and end on a day boundary, so this is the place to look.
+    applySeason();
+  }
+
+  /**
+   * Change into or out of a seasonal flavour if one has started or ended.
+   * The announcement waits for maybeAnnounceSeason: at startup there is no
+   * renderer yet to say it, and a fresh install says hello first.
+   */
+  function applySeason() {
+    const res = seasons.step({
+      flavor: store.get('flavor'),
+      seasonal: store.get('seasonal'),
+      season: store.get('season')
+    }, now());
+    if (res.season === store.get('season') && res.flavor === store.get('flavor')) return;
+    store.set({ flavor: res.flavor, season: res.season });
+    if (res.event) logger.info('season ' + res.event + ': now wearing ' + res.flavor);
+    world.seasonNews = res.event === 'start';
+    sendSettings();
+    pushSettings();
+  }
+
+  function maybeAnnounceSeason() {
+    if (!world.seasonNews || !world.onboardingDone || world.asleep) return;
+    world.seasonNews = false;
+    react('happy');
+    particles('sparkle', 8);
+    say('season_start', true);
   }
 
   function onWakeUp() {
@@ -711,6 +751,7 @@ function runApp(store) {
     return {
       settings: store.all,
       today: todayPayload(),
+      history: history.summarize(store.get('history'), store.get('today'), now()),
       pomodoroRunning: store.get('pomodoro').phase !== 'off',
       quiet: now() < store.get('quietUntil'),
       hidden: !!store.get('hidden')
@@ -870,6 +911,7 @@ function runApp(store) {
         break;
       }
       case 'water': {
+        rollDayIfNeeded();
         world.reminders = reminders.logWater(world.reminders, now());
         world.thirsty = false;
         const today = store.get('today');
@@ -1287,6 +1329,7 @@ function runApp(store) {
       if (!Object.keys(patch).length) return;
       store.set(patch);
       if ('launchAtLogin' in patch) applyLoginItem();
+      if ('seasonal' in patch) { applySeason(); maybeAnnounceSeason(); }
       sendSettings();
       refreshMenu();
       pushSettings();
@@ -1463,6 +1506,8 @@ function runApp(store) {
     // until the first time Pip is petted or fed.
     if (!store.get('moodUpdatedAt')) store.set({ moodUpdatedAt: now() });
     rollDayIfNeeded();
+    // Also when the day has not changed: an update installed mid-season.
+    applySeason();
     applyLoginItem();
 
     wireIPC();

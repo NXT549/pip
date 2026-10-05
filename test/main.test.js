@@ -43,20 +43,21 @@ function emitter(target) {
  * Boot main.js against a fake Electron.
  *
  * @param {object} t        the node:test context
- * @param {object} [opts]   {dev: boolean, data: object saved before boot}
+ * @param {object} [opts]   {dev: boolean, data: object saved before boot,
+ *                          start: the clock's starting time}
  */
 async function boot(t, opts) {
-  const o = Object.assign({ dev: false, data: {} }, opts);
+  const o = Object.assign({ dev: false, data: {}, start: START }, opts);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pip-main-'));
   const userData = o.dev ? path.join(root, 'Pip-dev') : root;
   fs.mkdirSync(userData, { recursive: true });
   fs.writeFileSync(path.join(userData, 'pip-data.json'), JSON.stringify(Object.assign({
     // Skip the first-run and first-of-the-day scripts; tests start them on purpose.
     onboarded: true,
-    lastGoodMorning: localDateKey(START)
+    lastGoodMorning: localDateKey(o.start)
   }, o.data)));
 
-  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: START });
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: o.start });
 
   const h = {
     sent: [],            // [channel, payload] sent to the overlay
@@ -410,5 +411,81 @@ test('no window of Pip\'s can be navigated away', async (t) => {
   contents.emit('will-navigate', { preventDefault: () => { prevented = true; } }, 'file:///C:/dropped.txt');
   assert.ok(prevented, 'dropping a file on Pip would load it in his place');
   assert.deepStrictEqual(contents.openHandler({ url: 'https://example.com' }), { action: 'deny' });
+  h.assertHealthy();
+});
+
+test('a glass just after midnight starts the new day, and the old one is filed away', async (t) => {
+  // The day used to roll only when the reminders' own day changed - and
+  // logging water rolls that quietly first. So a glass drunk before the next
+  // idle poll landed on yesterday, and today then never rolled over at all.
+  const h = await boot(t, { start: new Date('2026-09-21T23:59:55').getTime() });
+  h.fire('settings:action', { action: 'water' });
+  assert.deepStrictEqual([h.saved().today.date, h.saved().today.water], ['2026-09-21', 1]);
+
+  h.tick(6000);                    // 00:00:01, before the next idle poll
+  h.fire('settings:action', { action: 'water' });
+  h.tick(3 * MINUTE);
+
+  const saved = h.saved();
+  assert.strictEqual(saved.today.date, '2026-09-22', 'today never rolled over');
+  assert.strictEqual(saved.today.water, 1, 'the glass went on the wrong day');
+  assert.deepStrictEqual(saved.history, [
+    { date: '2026-09-21', pomodoros: 0, water: 1, longestStreakMs: 0 }
+  ]);
+
+  const payload = await h.ipc['settings:get']();
+  const days = payload.history.days;
+  assert.strictEqual(days.length, 28);
+  assert.strictEqual(days.find((d) => d.today).date, '2026-09-22');
+  assert.strictEqual(days.find((d) => d.date === '2026-09-21').water, 1);
+  assert.strictEqual(payload.history.streak, 2);
+  assert.deepStrictEqual(payload.history.week, { pomodoros: 0, water: 2, activeDays: 2 });
+  h.assertHealthy();
+});
+
+test('Pip dresses up for October, says so, and changes back in November', async (t) => {
+  const h = await boot(t, {
+    start: new Date('2026-10-31T23:57:00').getTime(),
+    data: { flavor: 'lime' }
+  });
+  const flavorSent = () => h.sent.filter((m) => m[0] === 'pip:settings').pop()[1].flavor;
+  assert.strictEqual(h.saved().flavor, 'pumpkin');
+  assert.strictEqual(flavorSent(), 'pumpkin');
+
+  h.tick(11000);
+  assert.ok(h.said().some((line) => Lines.variants('season_start').includes(line)),
+    'the new look was never mentioned');
+
+  h.tick(3 * MINUTE);
+  const saved = h.saved();
+  assert.strictEqual(saved.flavor, 'lime', 'Pip kept wearing pumpkin after Halloween');
+  assert.strictEqual(saved.season.key, '');
+  assert.strictEqual(flavorSent(), 'lime');
+  h.assertHealthy();
+});
+
+test('a flavour picked mid-season is kept when the season ends', async (t) => {
+  const h = await boot(t, {
+    start: new Date('2026-10-31T23:58:00').getTime(),
+    data: { flavor: 'lime' }
+  });
+  h.fire('settings:set', { patch: { flavor: 'grape' } });
+  h.tick(3 * MINUTE);
+  assert.strictEqual(h.saved().flavor, 'grape');
+  h.assertHealthy();
+});
+
+test('switching seasonal flavours off changes Pip straight back', async (t) => {
+  const h = await boot(t, {
+    start: new Date('2026-10-15T12:00:00').getTime(),
+    data: { flavor: 'blueberry' }
+  });
+  assert.strictEqual(h.saved().flavor, 'pumpkin');
+  h.fire('settings:set', { patch: { seasonal: false } });
+  assert.strictEqual(h.saved().flavor, 'blueberry');
+
+  // ...and he stays that way, rather than being handed pumpkin again.
+  h.tick(15000);
+  assert.strictEqual(h.saved().flavor, 'blueberry');
   h.assertHealthy();
 });

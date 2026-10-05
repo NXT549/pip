@@ -80,9 +80,11 @@ h2 {
 
 .flavors {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 8px;
 }
+
+.season-row { margin-top: 10px; }
 
 .flavor {
   display: flex;
@@ -201,6 +203,39 @@ input[type="checkbox"] {
   font-size: 11px;
   margin-top: 2px;
 }
+
+/* ---- streak calendar ---- */
+
+/* Square, hard-edged cells so it reads as pixel art, tinted with Pip's own
+   flavour (--bean is set from the palette by settings.js). */
+.calendar {
+  --bean: var(--accent);
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.calendar .weekday {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.calendar .day {
+  width: 30px;
+  height: 30px;
+  justify-self: center;
+  border: 2px solid var(--line);
+  background: var(--field);
+}
+
+.calendar .lv1 { background: color-mix(in srgb, var(--bean) 30%, var(--field)); }
+.calendar .lv2 { background: color-mix(in srgb, var(--bean) 55%, var(--field)); }
+.calendar .lv3 { background: color-mix(in srgb, var(--bean) 80%, var(--field)); }
+.calendar .lv4 { background: var(--bean); }
+.calendar .is-today { border-color: var(--ink); }
+.calendar .is-future { background: transparent; border-style: dashed; }
 
 /* ---- actions ---- */
 

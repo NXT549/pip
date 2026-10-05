@@ -15,6 +15,11 @@
 <section>
   <h2>Flavor</h2>
   <div class="flavors" id="flavors"></div>
+  <p class="note" id="seasonNote" hidden></p>
+  <div class="row season-row">
+    <label for="seasonal">Seasonal flavors<span class="hint">Pip dresses up for the season: bubblegum for Valentine's, pumpkin in October, candy cane in December. He changes back afterwards.</span></label>
+    <input type="checkbox" id="seasonal">
+  </div>
 </section>
 
 <section>
@@ -97,6 +102,18 @@
     <div class="stat"><div class="value" id="statStreak">0m</div><div class="label">Longest stretch</div></div>
     <div class="stat"><div class="value" id="statMood">-</div><div class="label">Pip&rsquo;s mood</div></div>
   </div>
+</section>
+
+<section>
+  <h2>Last four weeks</h2>
+  <div class="today">
+    <div class="stat"><div class="value" id="weekPomodoros">0</div><div class="label">Pomodoros this week</div></div>
+    <div class="stat"><div class="value" id="weekWater">0</div><div class="label">Glasses this week</div></div>
+    <div class="stat"><div class="value" id="weekDays">0</div><div class="label">Active days this week</div></div>
+    <div class="stat"><div class="value" id="dayStreak">0</div><div class="label">Day streak</div></div>
+  </div>
+  <div class="calendar" id="calendar" role="group" aria-label="Your last four weeks, one square per day"></div>
+  <p class="note">A day lights up when you finish a Pomodoro or log a glass of water, and gets brighter with every two Pomodoros. A day with either keeps your streak going.</p>
 </section>
 
 <section>

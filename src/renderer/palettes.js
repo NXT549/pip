@@ -59,7 +59,13 @@
     blueberry: { B: '#4a7fe0', D: '#2a4fa8', L: '#7fa9f0', F: '#1f3d85', H: '#ffffff' },
     lemon:     { B: '#f2cc3d', D: '#bd8f16', L: '#ffe884', F: '#9c7410', H: '#ffffff' },
     grape:     { B: '#9b5cd6', D: '#6a33a0', L: '#c08ef0', F: '#522480', H: '#ffffff' },
-    licorice:  { B: '#4a4756', D: '#333040', L: '#66627a', F: '#282532', H: '#a8aeb9' }
+    licorice:  { B: '#4a4756', D: '#333040', L: '#66627a', F: '#282532', H: '#a8aeb9' },
+    // Seasonal flavours. Pickable all year; src/main/seasons.js also hands
+    // them out for their season when the "seasonal flavours" setting is on.
+    bubblegum: { B: '#f06ec0', D: '#b23a86', L: '#ff9ad6', F: '#8f2668', H: '#ffffff' },
+    pumpkin:   { B: '#f08a24', D: '#b85a10', L: '#ffb25e', F: '#94460b', H: '#fff4e0' },
+    // A white bean whose gloss streak is the red stripe.
+    candycane: { B: '#f4ecee', D: '#e4485f', L: '#ffffff', F: '#b8304a', H: '#ff7f95' }
   };
 
   /** Flavour names in display order. */
