@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `AGENTS.md` and `docs/agents/`: a short guide for coding agents covering
+  the workflow, which files each common change touches, and the bugs that
+  have already shipped once. `CLAUDE.md` loads it for Claude Code.
+
+### Tests
+
+- `test/docs.test.js` fails when the agent guide names a file, function,
+  channel, npm script or `ARCHITECTURE.md` section that no longer exists.
+- The smoke test counts flavour previews from the palette, so adding a
+  flavour no longer fails it.
+
 ## 1.1.0
 
 A review of 1.0.0 as it actually ran, starting from its own log. Every fix in
