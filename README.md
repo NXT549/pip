@@ -12,6 +12,9 @@ never steal focus, and never appear in Alt+Tab.
 
 ## Installing Pip
 
+Building the installer yourself, or running Pip from source on Windows,
+macOS or Linux, is covered step by step in [docs/SETUP.md](docs/SETUP.md).
+
 1. Run **`Pip-Setup-1.1.0.exe`**.
 2. Windows will almost certainly show a blue **"Windows protected your PC"**
    box. This is SmartScreen reacting to an installer that has not been
@@ -76,6 +79,10 @@ running in the tray.
 ---
 
 ## Running from source
+
+See [docs/SETUP.md](docs/SETUP.md) for the full walk-through on each
+operating system. A copy run from source is always in dev mode, described
+below, so `npm start` and `npm run dev` behave the same.
 
 ```bash
 npm install
