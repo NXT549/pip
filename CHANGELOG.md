@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- A **Release** workflow builds the Windows installer, the portable build
+  and the Mac `.dmg` and attaches them to a GitHub release, so the
+  README's Download links work without anyone uploading files by hand. It
+  runs when a release is published, or from the Actions tab for a release
+  that already exists, and refuses a Mac build that would not run on both
+  Apple silicon and Intel.
+
 ### Changed
 
 - The README now opens with a **Download** section: one link for Windows,

@@ -35,9 +35,10 @@ Every version, with what changed in each, is on the
 
 ### On Windows
 
-1. Run **`Pip-Setup-1.2.0.exe`**. If your browser says the file is not
-   commonly downloaded, choose **Keep** (in Edge: **…** → **Keep** →
-   **Show more** → **Keep anyway**).
+1. Double-click **`Pip-Setup-1.2.0.exe`** once it has downloaded. It is
+   the whole installer, so there is nothing to unzip. If your browser says
+   the file is not commonly downloaded, choose **Keep** (in Edge: **…** →
+   **Keep** → **Show more** → **Keep anyway**).
 2. Windows will almost certainly show a blue **"Windows protected your PC"**
    box. This is SmartScreen reacting to an installer that has not been
    code-signed — signing certificates cost money and this one is unsigned.
@@ -263,8 +264,13 @@ Produces `dist/Pip-Setup-1.2.0.exe` and `dist/Pip-Portable-1.2.0.exe`. Icons are
 regenerated automatically first. On a Mac, `npm run dist:mac` builds Pip.app
 in a `.dmg`; [docs/SETUP.md](docs/SETUP.md#macos) has the details.
 
-To publish a version, attach those files to its GitHub release, and update
-the version in the [Download](#download) links above when you bump it.
+You do not have to upload them yourself. Publishing a release on GitHub
+starts the **Release** workflow, which builds the Windows installer and
+portable build and a universal Mac `.dmg` from that release's tag and
+attaches them to it. To fill a release that already exists, open
+**Actions → Release → Run workflow** and give its tag (for example
+`v1.2.0`). Remember to update the version in the [Download](#download)
+links above when you bump it.
 
 ### How Pip is put together
 
@@ -294,7 +300,7 @@ build/             installer resources for electron-builder
 tools/             the sprite authoring tools
 scripts/           icon generation, the smoke test
 test/              the unit tests
-.github/           CI, issue and PR templates
+.github/           CI, the release workflow, issue and PR templates
 ```
 
 `ARCHITECTURE.md` is the full contract: every exported signature, every IPC
