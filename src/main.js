@@ -37,6 +37,9 @@ const Palettes = require('./renderer/palettes.js');
  * ------------------------------------------------------------------ */
 
 const IS_SMOKE = process.argv.includes('--smoke');
+// How long a smoke run may take before it counts as hung. CI gives the Intel
+// half of the Mac app longer, because Rosetta translates it as it runs.
+const SMOKE_TIMEOUT_MS = Number(process.env.SMOKE_TIMEOUT_MS) || 20000;
 const IS_DEV = process.argv.includes('--dev') || (!app.isPackaged && !IS_SMOKE);
 const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
 const IS_MAC = process.platform === 'darwin';
@@ -1557,7 +1560,7 @@ function runApp(store) {
         logger.error('SMOKE FAIL timed out');
         process.stdout.write('SMOKE FAIL timed out\n');
         app.exit(1);
-      }, 20000);
+      }, SMOKE_TIMEOUT_MS);
     }
   });
 }

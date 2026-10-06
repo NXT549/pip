@@ -45,10 +45,12 @@ function emitter(target) {
  * @param {object} t        the node:test context
  * @param {object} [opts]   {dev: boolean, data: object saved before boot,
  *                          start: the clock's starting time,
- *                          platform: process.platform as main.js sees it}
+ *                          platform: process.platform as main.js sees it,
+ *                          smoke: boot with --smoke, as the smoke test does,
+ *                          env: environment variables main.js sees as it loads}
  */
 async function boot(t, opts) {
-  const o = Object.assign({ dev: false, data: {}, start: START, platform: 'win32' }, opts);
+  const o = Object.assign({ dev: false, data: {}, start: START, platform: 'win32', smoke: false, env: {} }, opts);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pip-main-'));
   const userData = o.dev ? path.join(root, 'Pip-dev') : root;
   fs.mkdirSync(userData, { recursive: true });
@@ -72,6 +74,7 @@ async function boot(t, opts) {
     errors: [],
     trays: [],
     calls: [],           // Electron calls only some platforms make, by name
+    smokeOut: [],        // the SMOKE lines a smoke run prints
     userData: userData
   };
 
@@ -143,7 +146,7 @@ async function boot(t, opts) {
       getVersion: () => '0.0.0-test',
       setLoginItemSettings() {},
       quit() {},
-      exit() {}
+      exit: (code) => h.calls.push('exit ' + code)
     }),
     BrowserWindow: FakeWindow,
     Tray: FakeTray,
@@ -189,15 +192,34 @@ async function boot(t, opts) {
     if (parent && parent.filename === MAIN && request === './src/main/logger.js') return silentLogger;
     return load.apply(this, arguments);
   };
-  // main.js reads the platform once, as it loads.
+  // main.js reads the platform, its flags and the environment once, as it loads.
   const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  const realArgv = process.argv;
+  const realEnv = {};
+  for (const name of Object.keys(o.env)) realEnv[name] = process.env[name];
   Object.defineProperty(process, 'platform', { value: o.platform, configurable: true });
+  if (o.smoke) process.argv = realArgv.concat(['--smoke']);
+  Object.assign(process.env, o.env);
   try {
     delete require.cache[MAIN];
     require(MAIN);
   } finally {
     Module._load = load;
     Object.defineProperty(process, 'platform', realPlatform);
+    process.argv = realArgv;
+    for (const name of Object.keys(realEnv)) {
+      if (realEnv[name] === undefined) delete process.env[name];
+      else process.env[name] = realEnv[name];
+    }
+  }
+
+  // A smoke run reports on stdout, which belongs to the test runner here.
+  if (o.smoke) {
+    const write = process.stdout.write;
+    t.mock.method(process.stdout, 'write', function (chunk) {
+      if (/^SMOKE /.test(String(chunk))) { h.smokeOut.push(String(chunk).trim()); return true; }
+      return write.apply(process.stdout, arguments);
+    });
   }
 
   t.after(() => {
@@ -548,4 +570,25 @@ test('opening Pip.app again on a Mac brings him over, even from hiding', async (
   h.tick(Animations.clipDuration('wave') + 200);
   assert.ok(h.sent.some((m) => m[0] === 'pip:goto' && m[1].x !== null), 'Pip never came over');
   h.assertHealthy();
+});
+
+test('a smoke run that hangs fails after 20 seconds', async (t) => {
+  // The fake settings window is never ready to show, so this run hangs.
+  const h = await boot(t, { smoke: true });
+  assert.ok(h.smokeOut.includes('SMOKE OK all clips played in all flavors'));
+  h.tick(19000);
+  assert.ok(!h.calls.includes('exit 1'), 'the smoke run gave up early');
+  h.tick(1000);
+  assert.ok(h.calls.includes('exit 1'), 'a hung smoke run never failed');
+  assert.ok(h.smokeOut.includes('SMOKE FAIL timed out'));
+});
+
+test('SMOKE_TIMEOUT_MS gives a slow smoke run longer, as CI does under Rosetta', async (t) => {
+  const h = await boot(t, { smoke: true, env: { SMOKE_TIMEOUT_MS: '60000' } });
+  h.tick(30000);
+  assert.ok(!h.calls.includes('exit 1'),
+    'the app kept its own 20 s deadline, so a run translated by Rosetta can never pass');
+  h.tick(30000);
+  assert.ok(h.calls.includes('exit 1'), 'a hung smoke run never failed');
+  assert.ok(h.smokeOut.includes('SMOKE FAIL timed out'));
 });

@@ -152,8 +152,9 @@ times fast. Press Control-C in the terminal to stop him.
 npm run dist:mac
 ```
 
-This takes a few minutes and produces `dist/Pip-<version>-<arch>.dmg`
-(`arm64` on Apple silicon, `x64` on Intel). Open it and drag **Pip** into
+This takes a few minutes and produces one `dist/Pip-<version>-mac.dmg`. It
+is a universal build, so the same file runs on Apple silicon and on Intel,
+whichever kind of Mac built it. Open it and drag **Pip** into
 **Applications**, then start him from Launchpad or Spotlight.
 
 The app is signed ad hoc, not with an Apple developer certificate, which is
