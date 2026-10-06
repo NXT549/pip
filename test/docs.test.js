@@ -175,3 +175,18 @@ test('every ARCHITECTURE.md section the docs cite exists', () => {
   }
   assert.deepStrictEqual(problems, []);
 });
+
+test("the README's download links point at the current version", () => {
+  // People download from these links, so a version bump that leaves them on
+  // the last release sends everyone to the old build, or to a file that is
+  // not there.
+  const version = JSON.parse(read('package.json')).version;
+  const links = [...read('README.md').matchAll(/releases\/(?:download|tag)\/v([\d.]+)/g)];
+  assert.ok(links.length >= 3, 'expected download links for Windows, the portable build and the Mac');
+  const stale = links.map((m) => m[0]).filter((l) => !l.endsWith('v' + version));
+  assert.deepStrictEqual(stale, [], 'README links to a release other than v' + version);
+  const files = [...read('README.md').matchAll(/releases\/download\/v[\d.]+\/(Pip-\S+?)\)/g)];
+  for (const [, file] of files) {
+    assert.ok(file.includes(version), file + ' is not named for v' + version);
+  }
+});

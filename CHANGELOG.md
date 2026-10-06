@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The README now opens with a **Download** section: one link for Windows,
+  one for the Mac, and the portable build. Installing on each system,
+  using Pip and troubleshooting come next, with Mac steps and folders
+  alongside the Windows ones, and everything about working on the code
+  moved under **For developers** at the end.
+- `docs/SETUP.md` says that people who only want to use Pip can download
+  him instead of building from source.
+
+### Tests
+
+- `test/docs.test.js` fails when the README's download links point at a
+  release other than the version in `package.json`, so a version bump
+  cannot leave them behind.
+
 ## 1.2.0
 
 Pip dresses up for the season and remembers your last four weeks. The code

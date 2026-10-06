@@ -8,14 +8,36 @@ water lately.
 He is a desktop pet, not a productivity nag. He will never block your screen,
 never steal focus, and never appear in Alt+Tab (or the Dock and ⌘-Tab on a Mac).
 
+**[Download](#download)** · [Install](#installing-pip) ·
+[Using Pip](#using-pip) · [Troubleshooting](#troubleshooting) ·
+[For developers](#for-developers)
+
+---
+
+## Download
+
+| Your computer | Download | Then |
+|---|---|---|
+| **Windows 10 or 11** | **[Pip-Setup-1.2.0.exe](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-Setup-1.2.0.exe)** | [Install on Windows](#on-windows) |
+| **Mac** (Apple silicon or Intel) | **[Pip-1.2.0-mac.dmg](https://github.com/NXT549/pip/releases/tag/v1.2.0)**, under **Assets** on the release page | [Install on a Mac](#on-a-mac) |
+| Linux | Not supported. You can still [run him from source](docs/SETUP.md#linux). | |
+
+Prefer not to install anything on Windows?
+**[Pip-Portable-1.2.0.exe](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-Portable-1.2.0.exe)**
+is a single file that runs wherever you put it.
+
+Every version, with what changed in each, is on the
+[releases page](https://github.com/NXT549/pip/releases).
+
 ---
 
 ## Installing Pip
 
-Building the installer yourself, or running Pip from source on Windows,
-macOS or Linux, is covered step by step in [docs/SETUP.md](docs/SETUP.md).
+### On Windows
 
-1. Run **`Pip-Setup-1.2.0.exe`**.
+1. Run **`Pip-Setup-1.2.0.exe`**. If your browser says the file is not
+   commonly downloaded, choose **Keep** (in Edge: **…** → **Keep** →
+   **Show more** → **Keep anyway**).
 2. Windows will almost certainly show a blue **"Windows protected your PC"**
    box. This is SmartScreen reacting to an installer that has not been
    code-signed — signing certificates cost money and this one is unsigned.
@@ -29,15 +51,25 @@ macOS or Linux, is covered step by step in [docs/SETUP.md](docs/SETUP.md).
 To remove Pip: **Settings → Apps → Installed apps → Pip → Uninstall**, the same
 as any other Windows app.
 
-There is also **`Pip-Portable-1.2.0.exe`**, a single self-contained file that
-runs without installing anything. The portable build never registers itself to
-launch at login.
+The portable build, **`Pip-Portable-1.2.0.exe`**, needs no installing: put it
+anywhere and double-click it. It never registers itself to launch at login.
 
-On a Mac there is one file for every Mac, **`Pip-1.2.0-mac.dmg`**: the build is
-universal, so it runs on Apple silicon and on Intel. Open it and drag **Pip**
-into Applications. [docs/SETUP.md](docs/SETUP.md#macos) has the details,
-including what to do when macOS will not open a copy built on another Mac, and
-how to build the `.dmg` yourself with `npm run dist:mac`.
+### On a Mac
+
+1. Open **`Pip-1.2.0-mac.dmg`** and drag **Pip** onto the **Applications**
+   folder. It is one universal file that runs on Apple silicon and Intel alike.
+2. Start Pip from Launchpad or Spotlight. The first time, macOS says it could
+   not verify Pip, because he is a free app that is not registered with
+   Apple. Click **Done** (not Move to Trash).
+3. Open **System Settings → Privacy & Security**, scroll down to the message
+   about Pip and click **Open Anyway**. You only do this once. On macOS
+   before Sequoia it is quicker: Control-click Pip in Applications, choose
+   **Open**, then **Open** again.
+4. Pip lives in the menu bar at the top right. He also starts when you log in
+   — you can turn that off in Settings.
+
+To remove Pip, quit him from his menu and drag Pip from Applications to the
+Trash.
 
 ### First run
 
@@ -57,7 +89,7 @@ his day.
 | Click him five times fast | Puffs up and scoots off in a huff |
 | Drag him | Dangles with all four legs paddling. Set him down gently and he carries on; throw him, or drop him from high up, and he tumbles, sees stars and shakes off the dizziness |
 | Drag him onto another monitor | He moves over and drops in under the pointer |
-| Right-click him | The full menu |
+| Right-click him (Control-click on a Mac) | The full menu |
 | Move the mouse sharply near him | Startles him |
 | Wander off for five minutes | He plays alone for a while, then curls up and sleeps. He wakes and greets you within a second of you coming back |
 
@@ -77,14 +109,81 @@ for that day's numbers.
 The tray icon's right-click menu and Pip's right-click menu are the same:
 Start/Stop Pomodoro, I drank water, Feed Pip, Call Pip, Quiet mode for 1 hour,
 Show/Hide Pip, Reset position, Settings, Quit. Left-clicking the tray icon
-shows or hides him.
+shows or hides him. On a Mac the icon is in the menu bar, and any click on it
+opens the menu.
 
 **Pip only quits from the Quit item.** Closing the settings window leaves him
 running in the tray.
 
 ---
 
-## Running from source
+## Troubleshooting
+
+**I can't open the download.**
+Windows and macOS both warn about apps that are not signed with a paid
+certificate. Follow [Installing Pip](#installing-pip) for your system:
+**More info → Run anyway** on Windows, **Open Anyway** in Privacy & Security
+on a Mac.
+
+**Pip has a black box around him.**
+Some graphics drivers cannot composite a transparent always-on-top window. Open
+**Settings → Behaviour → Compatibility mode**, then quit and reopen Pip. That
+turns off hardware acceleration on the next launch, which fixes it at a small
+cost in CPU.
+
+**Pip has disappeared.**
+Use **Reset position** from the tray menu. He will drop back in from the top of
+the display he was last on, with the overlay refitted to that display's work
+area. If that monitor has been unplugged, Pip falls back to the primary one.
+
+**Pip falls asleep while I am watching a video.**
+Pip measures activity with the system idle timer, which counts keyboard and
+mouse input. Watching a video without touching anything looks exactly like
+being away, so after five minutes he curls up. Nudge the mouse and he wakes and
+greets you. There is no setting for this — the five-minute threshold is fixed,
+and the activity level only changes how often he wanders, not when he sleeps.
+If it bothers you, hide him from the tray while you watch.
+
+**Pip changed colour on his own.**
+That is a seasonal flavour, and he changes back when the season ends. To keep
+your own flavour, pick it again in Settings (he keeps it for the rest of the
+season), or turn off **Seasonal flavors**.
+
+**Pip is in the way.**
+Drag him somewhere else, or **Hide Pip** from the tray. **Quiet mode for 1
+hour** keeps him around but stops the wandering and the speech bubbles.
+
+**Where are the logs?**
+`%APPDATA%\Pip\logs\pip.log` on Windows, or
+`~/Library/Application Support/Pip/logs/pip.log` on a Mac, rotating at about
+1 MB. `npm run dev` uses `Pip-dev` and `npm run smoke` uses `Pip-smoke` next
+to it, so neither can disturb your real settings or stats.
+
+**How do I start over?**
+Quit Pip and delete `%APPDATA%\Pip` (Windows) or
+`~/Library/Application Support/Pip` (Mac). Everything he knows lives in that
+one folder, and he will run first-time onboarding again next launch.
+
+**Something else is wrong.**
+[Open an issue](https://github.com/NXT549/pip/issues/new/choose) and say what
+you saw. The log file above helps.
+
+---
+
+## A note on what Pip is not
+
+Pip does not phone home, has no account, no telemetry and no network access of
+any kind. Everything he knows lives in one JSON file, `pip-data.json`, in the
+folder above, and you can delete it at any time.
+
+---
+
+## For developers
+
+Everything below is for working on Pip's code. You do not need any of it to
+use him.
+
+### Running from source
 
 See [docs/SETUP.md](docs/SETUP.md) for the full walk-through on each
 operating system, including building Pip.app on a Mac with
@@ -163,11 +262,13 @@ npm run dist
 ```
 
 Produces `dist/Pip-Setup-1.2.0.exe` and `dist/Pip-Portable-1.2.0.exe`. Icons are
-regenerated automatically first.
+regenerated automatically first. On a Mac, `npm run dist:mac` builds Pip.app
+in a `.dmg`; [docs/SETUP.md](docs/SETUP.md#macos) has the details.
 
----
+To publish a version, attach those files to its GitHub release, and update
+the version in the [Download](#download) links above when you bump it.
 
-## How Pip is put together
+### How Pip is put together
 
 Electron, plain HTML/CSS/JavaScript. No framework, no bundler, and no native
 modules — `electron` and `electron-builder` are the only dependencies, both dev
@@ -200,6 +301,7 @@ test/              the unit tests
 
 `ARCHITECTURE.md` is the full contract: every exported signature, every IPC
 channel and payload, the sprite format, and the state and clip name lists.
+Coding agents start at `AGENTS.md`.
 
 A few things worth knowing:
 
@@ -218,11 +320,9 @@ A few things worth knowing:
 - **Frames are pre-rendered** to offscreen canvases at startup for the current
   flavour and scale, and re-rendered when either changes.
 
----
+### Extending Pip
 
-## Extending Pip
-
-### Add an animation
+#### Add an animation
 
 1. Add the pose(s) to `tools/frame-specs.js`. A spec is a small object
    describing the body silhouette, the four leg lifts, the face and any props —
@@ -247,7 +347,7 @@ A few things worth knowing:
    key, lost the gloss highlight, or if the clip points at a frame that does not
    exist.
 
-### Add a reaction
+#### Add a reaction
 
 Reactions are decided in `src/main/brain.js`. The priority order at the top of
 that file is the contract — `held > sleeping > celebrating > thirsty >
@@ -256,14 +356,14 @@ that chain. If it is triggered by something the renderer notices (the pointer,
 a collision), send it up on one of the `renderer → main` channels listed in
 `ARCHITECTURE.md` §8 and add the channel to the allow-list in `src/preload.js`.
 
-### Add a speech line
+#### Add a speech line
 
 Open `src/renderer/lines.js` and add to the relevant situation's array. Every
 situation needs at least six variants and a test enforces it. Lines can be
 gated by mood and by hour, so a late-night or low-mood variant is just another
 entry with a condition. Pip never repeats the same line twice in a row.
 
-### Add a flavor
+#### Add a flavor
 
 `src/renderer/palettes.js`, the `FLAVORS` object:
 
@@ -277,50 +377,7 @@ season as well, add a row to `SEASONS` in `src/main/seasons.js`. Only the body k
 (`B D L F H`) may be overridden — the outline, eyes, blush and mouth are shared
 so Pip stays recognisably Pip.
 
----
-
-## Troubleshooting
-
-**Pip has a black box around him.**
-Some graphics drivers cannot composite a transparent always-on-top window. Open
-**Settings → Behaviour → Compatibility mode**, then quit and reopen Pip. That
-turns off hardware acceleration on the next launch, which fixes it at a small
-cost in CPU.
-
-**Pip has disappeared.**
-Use **Reset position** from the tray menu. He will drop back in from the top of
-the display he was last on, with the overlay refitted to that display's work
-area. If that monitor has been unplugged, Pip falls back to the primary one.
-
-**Pip falls asleep while I am watching a video.**
-Pip measures activity with the system idle timer, which counts keyboard and
-mouse input. Watching a video without touching anything looks exactly like
-being away, so after five minutes he curls up. Nudge the mouse and he wakes and
-greets you. There is no setting for this — the five-minute threshold is fixed,
-and the activity level only changes how often he wanders, not when he sleeps.
-If it bothers you, hide him from the tray while you watch.
-
-**Pip changed colour on his own.**
-That is a seasonal flavour, and he changes back when the season ends. To keep
-your own flavour, pick it again in Settings (he keeps it for the rest of the
-season), or turn off **Seasonal flavors**.
-
-**Pip is in the way.**
-Drag him somewhere else, or **Hide Pip** from the tray. **Quiet mode for 1
-hour** keeps him around but stops the wandering and the speech bubbles.
-
-**Where are the logs?**
-`%APPDATA%\Pip\logs\pip.log`, rotating at about 1 MB. `npm run dev` uses
-`%APPDATA%\Pip-dev` and `npm run smoke` uses `%APPDATA%\Pip-smoke`, so
-neither can disturb your real settings or stats.
-
-**How do I start over?**
-Quit Pip and delete `%APPDATA%\Pip`. Everything he knows lives in that one
-folder, and he will run first-time onboarding again next launch.
-
----
-
-## Three ways to grow Pip
+### Three ways to grow Pip
 
 1. **Friends.** Let a second jellybean spawn after a long streak — two Pips
    that notice each other, trot over, and sit together. Most of the work is
@@ -332,11 +389,3 @@ folder, and he will run first-time onboarding again next launch.
 3. **Focus-aware reactions.** Watch the foreground window title and let Pip
    respond to *what* you are doing rather than just whether you are doing it —
    a tiny hard hat when a build is running, a cheer when a long compile ends.
-
----
-
-## A note on what Pip is not
-
-Pip does not phone home, has no account, no telemetry and no network access of
-any kind. Everything he knows lives in one JSON file in
-`%APPDATA%\Pip\pip-data.json`, and you can delete it at any time.

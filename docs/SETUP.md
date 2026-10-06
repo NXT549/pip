@@ -11,7 +11,8 @@ about what you should expect.
 | | Windows 10/11 (x64) | macOS | Linux (X11) | Linux (Wayland) |
 |---|---|---|---|---|
 | Run from source | Yes | Yes | Yes, see below | Only through XWayland |
-| Installer | Yes, you build it | Yes, you build it | No | No |
+| Download | Yes | Yes | No | No |
+| Build the installer yourself | Yes | Yes | No | No |
 | Supported | **Yes** | **Yes** | No | No |
 
 On macOS, every change to Pip is checked on a real Mac by CI: the tests, the
@@ -25,8 +26,10 @@ Linux under a virtual X display: Pip starts, draws every animation in every
 flavour and opens the settings window. That proves he runs, not that the
 transparent, click-through overlay behaves on a real Linux desktop.
 
-There are no published downloads yet, so whichever system you are on, you
-start from the source code.
+If you only want to use Pip on Windows or a Mac, you do not need this guide:
+download him from the [Download](../README.md#download) section of the
+README. This guide is for running him from the source code, or building the
+installer yourself.
 
 ## Two things to know first
 
