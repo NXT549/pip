@@ -18,7 +18,7 @@ const EXPECTED_SITUATIONS = [
   'onboarding_drag', 'onboarding_menu', 'onboarding_flavor', 'onboarding_tray',
   'onboarding_menubar',
   'good_morning', 'welcome_back', 'pet', 'snack', 'click', 'startle', 'annoyed',
-  'water_due', 'water_logged', 'pomodoro_done', 'break_start', 'break_over',
+  'water_due', 'water_logged', 'water_goal', 'pomodoro_done', 'break_start', 'break_over',
   'drowsy', 'exhausted', 'late_night', 'bored', 'called', 'dizzy', 'low_mood',
   'high_mood', 'quiet_on', 'season_start', 'battery_low', 'on_battery'
 ];

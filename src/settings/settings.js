@@ -20,12 +20,17 @@
   /** Controls that map straight onto a settings key. */
   const NUMBER_FIELDS = [
     'pomodoroWork', 'pomodoroBreak', 'pomodoroLongBreak', 'pomodoroLongEvery',
-    'drowsyAfter', 'exhaustedAfter', 'waterInterval'
+    'drowsyAfter', 'exhaustedAfter', 'waterInterval', 'waterGoal'
   ];
   const SELECT_FIELDS = ['petSize', 'activityLevel'];
   const TOGGLE_FIELDS = ['notifications', 'launchAtLogin', 'compatibilityMode', 'seasonal'];
 
   let current = null;
+
+  /** The running block as main last described it, and when that was. */
+  let block = null;
+  let blockAt = 0;
+  let countdownTimer = null;
 
   /* ---------------------------------------------------------------- *
    * Flavour previews
@@ -185,7 +190,10 @@
     renderSeason(s);
 
     document.getElementById('statPomodoros').textContent = today.pomodoros || 0;
-    document.getElementById('statWater').textContent = today.water || 0;
+    const goal = s.waterGoal || 0;
+    document.getElementById('statWater').textContent =
+      goal > 0 ? (today.water || 0) + ' / ' + goal : (today.water || 0);
+    label('statWaterLabel', goal > 0 ? 'Glasses toward your goal' : 'Glasses of water');
     document.getElementById('statStreak').textContent = formatStreak(today.longestStreakMs);
     document.getElementById('statMood').textContent = moodWord(today.mood);
     renderHistory(payload.history, s.flavor);
@@ -194,6 +202,45 @@
     label('btnPomodoro', payload.pomodoroRunning ? 'Stop Pomodoro' : 'Start Pomodoro');
     label('btnQuiet', payload.quiet ? 'End quiet mode' : 'Quiet for 1 hour');
     label('btnVisible', payload.hidden ? 'Show Pip' : 'Hide Pip');
+    renderPomodoro(payload.pomodoro);
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Pomodoro status
+   * ---------------------------------------------------------------- */
+
+  const PHASE_WORDS = { work: 'Focus', break: 'Short break', longBreak: 'Long break' };
+
+  /** 4:05 for 245 seconds; 1:02:03 past the hour. */
+  function clock(ms) {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = String(total % 60).padStart(2, '0');
+    return h ? h + ':' + String(m).padStart(2, '0') + ':' + sec : m + ':' + sec;
+  }
+
+  /**
+   * Main only pushes on a change, so the countdown runs here, from the time
+   * left when the update arrived. Each push re-bases it, so it cannot drift.
+   */
+  function renderPomodoro(p) {
+    block = p && p.running ? p : null;
+    blockAt = Date.now();
+    const skip = document.getElementById('btnSkip');
+    if (skip) skip.hidden = !(block && (block.phase === 'break' || block.phase === 'longBreak'));
+    tickCountdown();
+    if (block && !countdownTimer) countdownTimer = setInterval(tickCountdown, 1000);
+    if (!block && countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  }
+
+  function tickCountdown() {
+    const el = document.getElementById('pomodoroStatus');
+    if (!el) return;
+    el.hidden = !block;
+    if (!block) return;
+    const left = block.remainingMs - (Date.now() - blockAt);
+    el.textContent = (PHASE_WORDS[block.phase] || 'Pomodoro') + ': ' + clock(left) + ' left';
   }
 
   /* ---------------------------------------------------------------- *

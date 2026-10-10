@@ -4,12 +4,33 @@
 
 ### Added
 
+- **A daily water goal.** A new setting, eight glasses unless you change
+  it (0 turns it off). Settings shows today's glasses against it, and the
+  glass that reaches it gets a dance, confetti and a new `water_goal` line
+  instead of the usual thank-you.
+- **Skip break.** During a short or long break, the tray menu, Pip's menu
+  and the settings window offer to end it and start the next work block
+  now. The finished block still counts, and work blocks cannot be skipped.
+- **Time left in Settings.** While a Pomodoro runs, the settings window
+  shows the phase and a live countdown above its buttons.
+
 - A **Release** workflow builds the Windows installer, the portable build
   and the Mac `.dmg` and attaches them to a GitHub release, so the
   README's Download links work without anyone uploading files by hand. It
   runs when a release is published, or from the Actions tab for a release
   that already exists, and refuses a Mac build that would not run on both
   Apple silicon and Intel.
+
+### Fixed
+
+- The tray tooltip said `(longBreak)`. It now reads like
+  "Pip: long break, 12 min left".
+- With **exhausted** set lower than **drowsy**, Pip went exhausted without
+  saying so until the drowsy threshold came round too. He now says it as
+  soon as he gets there.
+- Water reminders went nowhere while Pip was hidden, because only his
+  speech bubble carried them. A hidden Pip now sends a notification
+  instead, unless notifications or quiet mode say otherwise.
 
 ### Changed
 
@@ -22,6 +43,10 @@
   him instead of building from source.
 
 ### Tests
+
+- `main.test.js` covers the water goal, skipping a break, the tooltip's
+  wording, an exhausted threshold below the drowsy one, and the hidden-Pip
+  water notification. Its fake Electron now records notifications.
 
 - `test/docs.test.js` fails when the README's download links point at a
   release other than the version in `package.json`, so a version bump

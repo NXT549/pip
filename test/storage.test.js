@@ -323,3 +323,14 @@ test('seasonal flavours are on by default, and a junk value leaves them on', (t)
   assert.deepStrictEqual(cleanPatch({ seasonal: false, season: { key: 'x' } }), { seasonal: false },
     'the window may switch seasons off, but not write the season state');
 });
+
+test('the water goal is clamped, and 0 (no goal) is a real choice', (t) => {
+  const dir = tempDir(t);
+  writeData(dir, { waterGoal: -3 });
+  assert.strictEqual(createStorage(dir, fakeLog()).load().waterGoal, 0);
+  writeData(dir, { waterGoal: 99 });
+  assert.strictEqual(createStorage(dir, fakeLog()).load().waterGoal, 20);
+  writeData(dir, { waterGoal: 'lots' });
+  assert.strictEqual(createStorage(dir, fakeLog()).load().waterGoal, DEFAULTS.waterGoal);
+  assert.deepStrictEqual(cleanPatch({ waterGoal: 0 }), { waterGoal: 0 });
+});

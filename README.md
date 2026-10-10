@@ -106,8 +106,15 @@ finished a Pomodoro or logged a glass of water and brighter the more Pomodoros
 you did, with this week's totals and your current day streak. Hover a square
 for that day's numbers.
 
+Set a **daily water goal** in Settings (eight glasses unless you change it, 0
+for none) and Pip dances when the glass that gets you there goes down. While a
+Pomodoro runs, Settings counts down the time left, and during a break you can
+**Skip break** from either menu to get straight back to work. If you have
+hidden Pip, his water reminders arrive as notifications instead.
+
 The tray icon's right-click menu and Pip's right-click menu are the same:
-Start/Stop Pomodoro, I drank water, Feed Pip, Call Pip, Quiet mode for 1 hour,
+Start/Stop Pomodoro, Skip break (only during a break), I drank water, Feed
+Pip, Call Pip, Quiet mode for 1 hour,
 Show/Hide Pip, Reset position, Settings, Quit. Left-clicking the tray icon
 shows or hides him. On a Mac the icon is in the menu bar, and any click on it
 opens the menu.
