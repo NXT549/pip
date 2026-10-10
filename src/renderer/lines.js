@@ -165,6 +165,16 @@
       'Cheers! *clinks imaginary cup*'
     ],
 
+    water_goal: [
+      "That's your water goal for today! Splendid.",
+      'Goal reached! You are officially well watered.',
+      'Every glass today, done. I am so proud of you.',
+      'Full marks for hydration. Have a confetti.',
+      'Daily water: complete. You absolute fountain.',
+      "That's the lot! Any more is a bonus round.",
+      { t: 'Hydration champion! *does a little dance*', mood: [60, 100] }
+    ],
+
     pomodoro_done: [
       'Block done! Look at you go.',
       "That's a wrap on that one. Nice work.",

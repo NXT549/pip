@@ -76,12 +76,16 @@
     <label for="waterInterval">Water reminder every<span class="hint">Active minutes between reminders.</span></label>
     <input type="number" id="waterInterval" min="5" max="600" step="1">
   </div>
+  <div class="row">
+    <label for="waterGoal">Daily water goal<span class="hint">Glasses a day. Pip celebrates the one that gets you there. 0 turns it off.</span></label>
+    <input type="number" id="waterGoal" min="0" max="20" step="1">
+  </div>
 </section>
 
 <section>
   <h2>Behaviour</h2>
   <div class="row">
-    <label for="notifications">Notifications<span class="hint">A desktop notification when a Pomodoro block ends.</span></label>
+    <label for="notifications">Notifications<span class="hint">A desktop notification when a Pomodoro block ends, and for water reminders while Pip is hidden.</span></label>
     <input type="checkbox" id="notifications">
   </div>
   <div class="row">
@@ -98,7 +102,7 @@
   <h2>Today</h2>
   <div class="today">
     <div class="stat"><div class="value" id="statPomodoros">0</div><div class="label">Pomodoros</div></div>
-    <div class="stat"><div class="value" id="statWater">0</div><div class="label">Glasses of water</div></div>
+    <div class="stat"><div class="value" id="statWater">0</div><div class="label" id="statWaterLabel">Glasses of water</div></div>
     <div class="stat"><div class="value" id="statStreak">0m</div><div class="label">Longest stretch</div></div>
     <div class="stat"><div class="value" id="statMood">-</div><div class="label">Pip&rsquo;s mood</div></div>
   </div>
@@ -118,8 +122,10 @@
 
 <section>
   <h2>Pip</h2>
+  <p class="pomodoro-status" id="pomodoroStatus" hidden></p>
   <div class="actions">
     <button type="button" class="primary" data-action="pomodoro-toggle" id="btnPomodoro">Start Pomodoro</button>
+    <button type="button" data-action="pomodoro-skip" id="btnSkip" hidden>Skip break</button>
     <button type="button" data-action="water">I drank water</button>
     <button type="button" data-action="feed">Feed Pip</button>
     <button type="button" data-action="call">Call Pip</button>

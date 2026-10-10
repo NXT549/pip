@@ -363,7 +363,9 @@ function runApp(store) {
     const exhausted = worked >= s.exhaustedAfter * MINUTE * TIME_SCALE;
     const drowsy = worked >= s.drowsyAfter * MINUTE * TIME_SCALE;
 
-    if (!drowsy) { world.saidFatigue = null; return; }
+    // Exhausted can be set below drowsy. Then Pip is exhausted before he is
+    // drowsy, and must still say so rather than wait for the drowsy line.
+    if (!drowsy && !exhausted) { world.saidFatigue = null; return; }
     if (exhausted && world.saidFatigue !== 'exhausted') {
       world.saidFatigue = 'exhausted';
       say('exhausted', true);
@@ -468,25 +470,42 @@ function runApp(store) {
       say('break_over', true);
       notify('Break over', 'Back to it when you are ready.');
     }
+    // Skip break is only offered during a break.
+    refreshMenu();
     pushSettings();
     sendPomodoro();
+  }
+
+  /** How a phase reads to a person. 'longBreak' is a key, not a word. */
+  const PHASE_WORDS = { work: 'focus', break: 'short break', longBreak: 'long break' };
+
+  function onBreak() {
+    const phase = store.get('pomodoro').phase;
+    return phase === 'break' || phase === 'longBreak';
+  }
+
+  function pomodoroPayload() {
+    const state = store.get('pomodoro');
+    const cfg = pomodoroCfg();
+    const running = state.phase !== 'off';
+    return {
+      running: running,
+      phase: state.phase,
+      remainingMs: running ? pomodoro.remaining(state, now(), cfg) : 0,
+      totalMs: running ? pomodoro.phaseDuration(state.phase, cfg) : 0
+    };
   }
 
   function sendPomodoro() {
     world.lastPomodoroSentAt = Date.now();
     const state = store.get('pomodoro');
-    const cfg = pomodoroCfg();
-    const running = state.phase !== 'off';
-    const remainingMs = running ? pomodoro.remaining(state, now(), cfg) : 0;
-    send('pip:pomodoro', {
-      running: running,
-      phase: state.phase,
-      remainingMs: remainingMs,
-      totalMs: running ? pomodoro.phaseDuration(state.phase, cfg) : 0
-    });
+    const p = pomodoroPayload();
+    const running = p.running;
+    const remainingMs = p.remainingMs;
+    send('pip:pomodoro', p);
 
     const tip = running
-      ? 'Pip - ' + Math.max(0, Math.ceil(remainingMs / 60000)) + ' min left (' + state.phase + ')'
+      ? 'Pip: ' + PHASE_WORDS[state.phase] + ', ' + Math.max(0, Math.ceil(remainingMs / 60000)) + ' min left'
       : 'Pip';
     if (tray && !tray.isDestroyed() && tip !== world.lastTooltip) {
       world.lastTooltip = tip;
@@ -531,6 +550,11 @@ function runApp(store) {
         world.thirsty = true;
         say('water_due', true);
         particles('sweat', 2);
+        // A hidden Pip's bubble is seen by nobody, so the reminder would
+        // otherwise go nowhere at all. Quiet mode still means quiet.
+        if (store.get('hidden') && now() >= store.get('quietUntil')) {
+          notify('Water break', 'Pip says it is time for a glass of water.');
+        }
       }
       world.thirsty = due;
     }
@@ -763,6 +787,7 @@ function runApp(store) {
       today: todayPayload(),
       history: history.summarize(store.get('history'), store.get('today'), now()),
       pomodoroRunning: store.get('pomodoro').phase !== 'off',
+      pomodoro: pomodoroPayload(),
       quiet: now() < store.get('quietUntil'),
       hidden: !!store.get('hidden')
     };
@@ -879,7 +904,10 @@ function runApp(store) {
     const running = store.get('pomodoro').phase !== 'off';
     const quiet = now() < store.get('quietUntil');
     const items = [
-      { label: running ? 'Stop Pomodoro' : 'Start Pomodoro', click: () => doAction('pomodoro-toggle') },
+      { label: running ? 'Stop Pomodoro' : 'Start Pomodoro', click: () => doAction('pomodoro-toggle') }
+    ];
+    if (onBreak()) items.push({ label: 'Skip break', click: () => doAction('pomodoro-skip') });
+    items.push(
       { label: 'I drank water', click: () => doAction('water') },
       { label: 'Feed Pip', click: () => doAction('feed') },
       { label: 'Call Pip', click: () => doAction('call') },
@@ -894,7 +922,7 @@ function runApp(store) {
       { label: 'Reset position', click: () => doAction('reset-position') },
       { type: 'separator' },
       { label: 'Settings', click: () => doAction('settings') }
-    ];
+    );
     if (IS_DEV) items.push({ label: 'Debug panel', click: () => doAction('debug') });
     items.push({ type: 'separator' });
     items.push({ label: 'Quit Pip', click: () => doAction('quit') });
@@ -932,15 +960,34 @@ function runApp(store) {
         pushSettings();
         break;
       }
+      case 'pomodoro-skip': {
+        if (!onBreak()) break;
+        store.set({ pomodoro: pomodoro.skipBreak(store.get('pomodoro'), now()) });
+        say('break_over', true);
+        sendPomodoro();
+        refreshMenu();
+        pushSettings();
+        break;
+      }
       case 'water': {
         rollDayIfNeeded();
         world.reminders = reminders.logWater(world.reminders, now());
         world.thirsty = false;
         const today = store.get('today');
-        store.set({ today: Object.assign({}, today, { water: today.water + 1 }) });
-        react('happy');
+        const water = today.water + 1;
+        store.set({ today: Object.assign({}, today, { water: water }) });
         particles('water', 5);
-        say('water_logged', true);
+        // The glass that reaches the day's goal gets a party, once a day:
+        // only that exact glass matches, so the ones after it do not.
+        const goal = store.get('waterGoal');
+        if (goal > 0 && water === goal) {
+          react('dance');
+          particles('confetti', 14);
+          say('water_goal', true);
+        } else {
+          react('happy');
+          say('water_logged', true);
+        }
         bumpMood('water');
         pushSettings();
         break;
@@ -1120,8 +1167,7 @@ function runApp(store) {
         hour: new Date(t).getHours(),
         activityLevel: s.activityLevel,
         climbing: world.climbing,
-        onBreak: store.get('pomodoro').phase === 'break' ||
-                 store.get('pomodoro').phase === 'longBreak'
+        onBreak: onBreak()
       });
       world.wander = result.wander;
 

@@ -71,6 +71,7 @@ async function boot(t, opts) {
     menus: [],
     errors: [],
     trays: [],
+    notifications: [],   // titles of the notifications shown
     calls: [],           // Electron calls only some platforms make, by name
     userData: userData
   };
@@ -124,8 +125,9 @@ async function boot(t, opts) {
   }
 
   class FakeNotification {
-    static isSupported() { return false; }
-    show() {}
+    constructor(options) { this.options = options; }
+    static isSupported() { return true; }
+    show() { h.notifications.push(this.options.title); }
   }
 
   const paths = { appData: root, userData: root };
@@ -547,5 +549,87 @@ test('opening Pip.app again on a Mac brings him over, even from hiding', async (
   assert.strictEqual(h.lastState().clip, 'wave');
   h.tick(Animations.clipDuration('wave') + 200);
   assert.ok(h.sent.some((m) => m[0] === 'pip:goto' && m[1].x !== null), 'Pip never came over');
+  h.assertHealthy();
+});
+
+test('the glass that reaches the water goal gets a party, and only that one', async (t) => {
+  const h = await boot(t, { data: { waterGoal: 3 } });
+  for (let i = 0; i < 2; i++) h.fire('settings:action', { action: 'water' });
+  assert.ok(!h.said().some((l) => Lines.variants('water_goal').includes(l)));
+
+  h.fire('settings:action', { action: 'water' });
+  h.tick(200);
+  assert.ok(Lines.variants('water_goal').includes(h.said().slice(-1)[0]), 'the goal went unremarked');
+  assert.strictEqual(h.lastState().clip, 'dance');
+
+  h.tick(5000);
+  h.fire('settings:action', { action: 'water' });
+  assert.ok(Lines.variants('water_logged').includes(h.said().slice(-1)[0]),
+    'a fourth glass celebrated the goal again');
+  assert.strictEqual(h.saved().today.water, 4);
+  h.assertHealthy();
+});
+
+test('a water goal of 0 means no goal at all', async (t) => {
+  const h = await boot(t, { data: { waterGoal: 0 } });
+  h.fire('settings:action', { action: 'water' });
+  assert.ok(Lines.variants('water_logged').includes(h.said().slice(-1)[0]));
+  h.assertHealthy();
+});
+
+test('a break can be skipped from the menu, and only a break', async (t) => {
+  const h = await boot(t);
+  h.fire('settings:action', { action: 'pomodoro-toggle' });
+  h.tick(200);
+  assert.strictEqual(h.menuItem(/^Skip break/), undefined, 'offered to skip a work block');
+  h.fire('settings:action', { action: 'pomodoro-skip' });
+  assert.strictEqual(h.saved().pomodoro.phase, 'work');
+
+  h.tick(25 * MINUTE + 1000);
+  assert.strictEqual(h.saved().pomodoro.phase, 'break');
+  assert.ok(h.menuItem(/^Skip break/), 'the tray menu never offered Skip break');
+  assert.strictEqual((await h.ipc['settings:get']()).pomodoro.phase, 'break');
+
+  h.menuItem(/^Skip break/).click();
+  const saved = h.saved().pomodoro;
+  assert.strictEqual(saved.phase, 'work');
+  assert.strictEqual(saved.completed, 1, 'skipping the break lost the finished block');
+  assert.ok(Lines.variants('break_over').includes(h.said().slice(-1)[0]));
+  assert.strictEqual(h.menuItem(/^Skip break/), undefined);
+  assert.strictEqual(h.saved().today.pomodoros, 1);
+  h.assertHealthy();
+});
+
+test('the tray tooltip names the phase in words', async (t) => {
+  const h = await boot(t);
+  const tips = [];
+  h.trays[0].setToolTip = (tip) => tips.push(tip);
+  h.fire('settings:action', { action: 'pomodoro-toggle' });
+  h.tick(1500);
+  assert.strictEqual(tips[tips.length - 1], 'Pip: focus, 25 min left');
+  h.assertHealthy();
+});
+
+test('exhausted set below drowsy still gets said', async (t) => {
+  const h = await boot(t, { data: { drowsyAfter: 120, exhaustedAfter: 30 } });
+  h.idleSeconds = 0;
+  h.tick(31 * MINUTE);
+  assert.ok(h.said().some((l) => Lines.variants('exhausted').includes(l)),
+    'Pip was exhausted and never said so');
+  h.assertHealthy();
+});
+
+test('a water reminder reaches you as a notification while Pip is hidden', async (t) => {
+  const h = await boot(t, { data: { hidden: true, waterInterval: 10 } });
+  h.tick(11 * MINUTE);
+  assert.ok(h.notifications.includes('Water break'), 'the reminder went nowhere');
+  h.assertHealthy();
+});
+
+test('a visible Pip does not also send a notification for water', async (t) => {
+  const h = await boot(t, { data: { waterInterval: 10 } });
+  h.tick(11 * MINUTE);
+  assert.ok(h.said().some((l) => Lines.variants('water_due').includes(l)));
+  assert.ok(!h.notifications.includes('Water break'));
   h.assertHealthy();
 });
