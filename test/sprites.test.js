@@ -52,10 +52,17 @@ function countChar(frame, ch) {
 test('there are frames at all', () => {
   assert.ok(Sprites.FRAME_NAMES.length > 0, 'no frames');
   assert.deepStrictEqual(Sprites.FRAME_NAMES, Object.keys(Sprites.FRAMES));
-  assert.strictEqual(SIZE, 32);
+  assert.strictEqual(SIZE, 64);
 });
 
-test('every frame is 32 rows of 32 characters', () => {
+test('the grid is Pip\'s 32-unit grid at DETAIL pixels per unit', () => {
+  // The renderer sizes Pip, his feet and everything around him in 32-grid
+  // units, so a finer grid has to divide back into exactly that.
+  assert.strictEqual(Sprites.DETAIL, 2);
+  assert.strictEqual(SIZE / Sprites.DETAIL, 32);
+});
+
+test('every frame is 64 rows of 64 characters', () => {
   for (const name of Sprites.FRAME_NAMES) {
     const frame = Sprites.FRAMES[name];
     assert.ok(Array.isArray(frame), name + ' is not an array');
@@ -193,6 +200,18 @@ test('frameAt walks a clip and reports when it is done', () => {
       assert.strictEqual(Animations.frameAt(name, t).frame, frame, name + ' frame ' + i);
       t += clip.durations[i];
     });
+  }
+});
+
+test('feet still rest on the floor row', () => {
+  // FOOT_OFFSET in renderer.js is 31 units: the near feet end on the last
+  // sprite row of unit row 30, and nothing stands lower than that.
+  const floorRow = 31 * Sprites.DETAIL - 1;
+  for (const name of ['idle_0', 'walk_1', 'run_1', 'sit_0', 'thirsty_0']) {
+    const frame = Sprites.FRAMES[name];
+    let last = -1;
+    frame.forEach((row, r) => { if (/[^.]/.test(row)) last = r; });
+    assert.strictEqual(last, floorRow, name + ' bottoms out on row ' + last);
   }
 });
 

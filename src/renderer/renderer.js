@@ -25,9 +25,19 @@
   const Particles = P.Particles;
   const Bubbles = P.Bubbles;
 
-  const SIZE = Sprites.FRAME_SIZE;
-  /** Sprite row the feet rest on, plus one, so we can sit Pip on the floor. */
+  /** Sprite pixels across a frame. */
+  const GRID = Sprites.FRAME_SIZE;
+  /** Sprite pixels per Pip unit. settings.scale is DIPs per Pip unit. */
+  const DETAIL = Sprites.DETAIL || 1;
+  /** A frame's size in Pip units, the grid every on-screen size is measured in. */
+  const SIZE = GRID / DETAIL;
+  /** Pip-unit row the feet rest on, plus one, so we can sit Pip on the floor. */
   const FOOT_OFFSET = 31;
+  /**
+   * Below this many device pixels per sprite pixel, a fractional size is
+   * drawn smoothed rather than snapped (see paintFrame).
+   */
+  const SNAP_MIN_PX = 3;
   const TARGET_FPS = 30;
   const SLEEP_FPS = 5;
 
@@ -165,36 +175,62 @@
    */
   function prerender() {
     const palette = Palettes.resolve(settings.flavor);
-    const px = settings.scale * dpr;      // device pixels per sprite pixel
+    const px = (settings.scale * dpr) / DETAIL;   // device pixels per sprite pixel
     const cache = Object.create(null);
 
     for (const name of Sprites.FRAME_NAMES) {
-      const rows = Sprites.FRAMES[name];
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(SIZE * px));
-      c.height = Math.max(1, Math.round(SIZE * px));
-      const g = c.getContext('2d');
-      g.imageSmoothingEnabled = false;
-      for (let r = 0; r < SIZE; r++) {
-        const row = rows[r];
-        for (let col = 0; col < SIZE; col++) {
-          const ch = row[col];
-          if (ch === Palettes.TRANSPARENT) continue;
-          const color = palette[ch];
-          if (!color) continue;
-          g.fillStyle = color;
-          // round outwards so neighbouring pixels never leave a seam
-          const x0 = Math.round(col * px);
-          const y0 = Math.round(r * px);
-          const x1 = Math.round((col + 1) * px);
-          const y1 = Math.round((r + 1) * px);
-          g.fillRect(x0, y0, x1 - x0, y1 - y0);
-        }
-      }
-      cache[name] = c;
+      cache[name] = paintFrame(Sprites.FRAMES[name], palette, px);
     }
     frameCache = cache;
     lastDrawKey = '';
+  }
+
+  /**
+   * One frame on its own canvas, `px` device pixels per sprite pixel.
+   *
+   * A whole number of device pixels per sprite pixel (every Mac Retina size,
+   * and Windows at 100% and 200%) is painted pixel for pixel, so every edge
+   * is razor sharp. A fractional one, like the small size at 125%, cannot
+   * be: snapping each sprite pixel to the device grid makes some one pixel
+   * wide and their neighbours two, and on Pip's fine lines that reads as a
+   * wobble. So under SNAP_MIN_PX those are painted at the next whole size
+   * up and scaled down smoothly, which keeps every line the same weight.
+   */
+  function paintFrame(rows, palette, px) {
+    const whole = Math.abs(px - Math.round(px)) < 0.01;
+    const snap = whole || px >= SNAP_MIN_PX;
+    const paintPx = snap ? px : Math.ceil(px);
+    const src = document.createElement('canvas');
+    src.width = Math.max(1, Math.round(GRID * paintPx));
+    src.height = Math.max(1, Math.round(GRID * paintPx));
+    const g = src.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    for (let r = 0; r < GRID; r++) {
+      const row = rows[r];
+      for (let col = 0; col < GRID; col++) {
+        const ch = row[col];
+        if (ch === Palettes.TRANSPARENT) continue;
+        const color = palette[ch];
+        if (!color) continue;
+        g.fillStyle = color;
+        // round outwards so neighbouring pixels never leave a seam
+        const x0 = Math.round(col * paintPx);
+        const y0 = Math.round(r * paintPx);
+        const x1 = Math.round((col + 1) * paintPx);
+        const y1 = Math.round((r + 1) * paintPx);
+        g.fillRect(x0, y0, x1 - x0, y1 - y0);
+      }
+    }
+    if (snap) return src;
+
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(GRID * px));
+    c.height = Math.max(1, Math.round(GRID * px));
+    const cg = c.getContext('2d');
+    cg.imageSmoothingEnabled = true;
+    cg.imageSmoothingQuality = 'high';
+    cg.drawImage(src, 0, 0, c.width, c.height);
+    return c;
   }
 
   function resizeCanvas() {
@@ -239,10 +275,10 @@
     if (x < rect.left || x >= rect.left + rect.width) return false;
     if (y < rect.top || y >= rect.top + rect.height) return false;
 
-    let col = Math.floor(((x - rect.left) / rect.width) * SIZE);
-    const row = Math.floor(((y - rect.top) / rect.height) * SIZE);
-    if (body.facing === -1) col = SIZE - 1 - col;
-    if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return false;
+    let col = Math.floor(((x - rect.left) / rect.width) * GRID);
+    const row = Math.floor(((y - rect.top) / rect.height) * GRID);
+    if (body.facing === -1) col = GRID - 1 - col;
+    if (row < 0 || row >= GRID || col < 0 || col >= GRID) return false;
     return rows[row][col] !== Palettes.TRANSPARENT;
   }
 

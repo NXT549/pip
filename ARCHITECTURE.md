@@ -117,37 +117,53 @@ Palettes.DEFAULT_FLAVOR, Palettes.TRANSPARENT
 
 ### Frames
 
-A frame is **an array of exactly 32 strings, each exactly 32 characters**.
+A frame is **an array of exactly 64 strings, each exactly 64 characters**.
 Every character is a palette key; `.` is transparent. Frames are drawn
 **facing right**; the renderer flips horizontally to face left.
 
+The 64 grid is Pip's original 32-unit grid at `DETAIL = 2` sprite pixels
+per unit. Everything on screen is measured in **Pip units**: `settings.scale`
+is DIPs per unit, `FOOT_OFFSET` and every offset in `renderer.js` and
+`particles.js` are in units, and `tools/frame-specs.js` is written in units.
+Only code that indexes `Sprites.FRAMES` rows and columns works in sprite
+pixels; divide by `DETAIL` to get back to units.
+
 ```js
-Sprites.FRAME_SIZE   // 32
-Sprites.FRAMES       // { frameName: [32 strings] }
+Sprites.FRAME_SIZE   // 64, sprite pixels across a frame
+Sprites.DETAIL       // 2, sprite pixels per Pip unit (FRAME_SIZE / DETAIL === 32)
+Sprites.FRAMES       // { frameName: [64 strings] }
 Sprites.FRAME_NAMES  // string[]
 ```
 
 Rules every frame must satisfy (enforced by `test/sprites.test.js`):
 
-1. exactly 32 rows of exactly 32 characters
+1. exactly 64 rows of exactly 64 characters
 2. every character is a valid palette key
 3. not fully empty
 4. contains at least two `H` pixels — the gloss streak is Pip's signature and
    must survive every pose
 5. contains at least one `O` pixel — everything is outlined
 
-Geometry conventions (from `tools/gen-sprites.js`):
+Geometry conventions (from `tools/gen-sprites.js`, in Pip units unless
+stated):
 
-- body ≈ 23 × 14 px, centred on column 16, a gentle 1px inward dip along the top
-- near feet rest on row 30; the far pair land on row 29, which is what reads as depth
+- the body layer (bean, legs, outline, shading) is built on the unit grid and
+  each unit drawn as a `DETAIL × DETAIL` block, so Pip keeps his chunky shape;
+  eyes, mouths, blush, the gloss streak and props are drawn at full sprite
+  resolution on top
+- body ≈ 23 × 14 units, centred on column 16, a gentle 1-unit inward dip along the top
+- near feet rest on unit row 30 (sprite rows 60–61); the far pair land on
+  row 29, which is what reads as depth
 - `FOOT_OFFSET = 31` — the renderer sits Pip on the floor using this
-- the face sits on the front (right) third; eyes are 3×3 with a `W` pixel in
-  the upper-left corner
+- the face sits on the front (right) third; eyes are 3×3 units (6×6 sprite
+  pixels) with a large `W` highlight up and back and a small one low and
+  forward
 
 ### Authoring
 
-`tools/frame-specs.js` holds the pose table; `npm run sprites` runs it through
-`tools/gen-sprites.js` and writes `src/renderer/sprites.js` as literal data.
+`tools/frame-specs.js` holds the pose table, in Pip units; `npm run sprites`
+runs it through `tools/gen-sprites.js`, which draws each unit as a
+`DETAIL × DETAIL` block, and writes `src/renderer/sprites.js` as literal data.
 That generated file is the runtime source of truth and is hand-editable. A
 spec is:
 
@@ -432,5 +448,9 @@ flavour, size or activity level falls back to its default.
 - no repaint when nothing changed
 - work in DIPs everywhere; size the canvas by `devicePixelRatio` and set
   `imageSmoothingEnabled = false` so pixels stay crisp at 100 %–200 % scaling
+- a sprite pixel is `scale × devicePixelRatio / DETAIL` device pixels. When
+  that is a whole number, or at least 3, frames are painted pixel for pixel;
+  a smaller fractional size is painted at the next whole size and scaled
+  down smoothly, so the one-pixel face details keep an even weight
 - every frame is pre-rendered to an offscreen canvas at startup for the
   current flavour and scale, and re-rendered when either changes
