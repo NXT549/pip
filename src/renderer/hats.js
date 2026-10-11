@@ -18,7 +18,8 @@
 // Every overlay script shares one global scope, so nothing here may be
 // declared at the top level - see ARCHITECTURE.md section 1.
 (function () {
-  const SIZE = 32;
+  /** The art grid hats are drawn on. A finer grid (see place) scales them up. */
+  const GRID = 32;
   const TRANSPARENT = '.';
   /** The palette keys that are Pip's body, and so the top of his head. */
   const BODY = 'BLHD';
@@ -112,18 +113,26 @@
 
   /** Quarter turns, matching tools/gen-sprites.js: rotate90 undoes rotate270. */
   function rotate90(g) {
-    const o = toGrid(new Array(SIZE).fill(TRANSPARENT.repeat(SIZE)));
-    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) o[c][SIZE - 1 - r] = g[r][c];
+    const n = g.length;
+    const o = toGrid(new Array(n).fill(TRANSPARENT.repeat(n)));
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) o[c][n - 1 - r] = g[r][c];
     return o;
   }
   function rotate270(g) {
-    const o = toGrid(new Array(SIZE).fill(TRANSPARENT.repeat(SIZE)));
-    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) o[SIZE - 1 - c][r] = g[r][c];
+    const n = g.length;
+    const o = toGrid(new Array(n).fill(TRANSPARENT.repeat(n)));
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) o[n - 1 - c][r] = g[r][c];
     return o;
   }
 
-  /** Lay `hat` on an upright grid, in place. False when there is no head to put it on. */
+  /**
+   * Lay `hat` on an upright grid, in place. False when there is no head to
+   * put it on. Hats are drawn for the 32-pixel grid; on a finer grid each hat
+   * pixel becomes a k x k block, so a hat stays the same size on screen.
+   */
   function place(g, hat) {
+    const SIZE = g.length;
+    const k = Math.max(1, Math.round(SIZE / GRID));
     // The top of the head: the first body row, and how wide the body is there.
     let top = -1;
     for (let r = 0; r < SIZE && top < 0; r++) {
@@ -136,7 +145,7 @@
     // gentle dip in the top outline would otherwise pull the hat off centre.
     let left = SIZE;
     let right = -1;
-    for (let r = top; r < Math.min(SIZE, top + 4); r++) {
+    for (let r = top; r < Math.min(SIZE, top + 4 * k); r++) {
       for (let c = 0; c < SIZE; c++) {
         if (BODY.indexOf(g[r][c]) === -1) continue;
         if (c < left) left = c;
@@ -144,9 +153,10 @@
       }
     }
 
-    const h = hat.rows.length;
-    const w = hat.rows[0].length;
-    const c0 = Math.round((left + right) / 2 + FACE_SHIFT - (w - 1) / 2);
+    const h = hat.rows.length * k;
+    const w = hat.rows[0].length * k;
+    // Worked out in 32-grid pixels, so a finer grid lands on the same spot.
+    const c0 = k * Math.round((left + right + 1) / k / 2 + FACE_SHIFT - hat.rows[0].length / 2);
 
     // Sit the brim on the highest point of the outline underneath it, so the
     // hat rests on the head instead of sinking into it.
@@ -163,7 +173,7 @@
       if (r < 0 || r >= SIZE) continue;
       for (let hc = 0; hc < w; hc++) {
         const c = c0 + hc;
-        const ch = hat.rows[hr][hc];
+        const ch = hat.rows[Math.floor(hr / k)][Math.floor(hc / k)];
         if (ch === TRANSPARENT || c < 0 || c >= SIZE) continue;
         g[r][c] = ch;
       }
@@ -172,18 +182,18 @@
   }
 
   /**
-   * A frame with a hat on. Returns a new array of 32 strings; the frame itself
+   * A frame with a hat on. Returns a new array of rows; the frame itself
    * is never changed. Gives the frame back as it was for no hat, an unknown
    * hat, or a pose already wearing the nightcap.
    *
-   * @param {string[]} rows      the frame, 32 strings of 32 palette keys
+   * @param {string[]} rows      the frame: square, 32 rows or a multiple of 32
    * @param {string} hatName
    * @param {string} [frameName] lets a sideways climbing pose wear it sideways
    * @returns {string[]}
    */
   function dress(rows, hatName, frameName) {
     const hat = HATS[hatName];
-    if (!hat || !hat.rows.length || !rows || rows.length !== SIZE) return rows;
+    if (!hat || !hat.rows.length || !rows || !rows.length || rows.length % GRID) return rows;
     if (frameName && /_cap$/.test(frameName)) return rows;
 
     const sideways = !!frameName && ROTATED.test(frameName);

@@ -124,7 +124,8 @@ collides with a palette key, so hats sit outside the 12-entry cap and look the
 same in every flavour. Hats, in display order: `none` (default), `party`,
 `tophat`, `crown`, `beanie`, `flower`.
 
-Hats are not baked into `sprites.js`. `dress` lays one over a frame at runtime:
+Hats are not baked into `sprites.js`. `dress` lays one over a frame at runtime
+(drawn for the 32-pixel grid, scaled up whole on a finer one):
 the hat's bottom row replaces the top outline of the body, centred a little
 towards the face. The sideways `climb_*` poses wear it sideways, and a `_cap`
 frame keeps its nightcap instead. The renderer pre-renders and hit-tests the

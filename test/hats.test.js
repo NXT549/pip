@@ -70,8 +70,8 @@ test('every hat sits on every pose without covering his eyes', () => {
       const before = rows.slice();
       const out = Hats.dress(rows, name, frame);
       assert.deepStrictEqual(rows, before, 'dress changed ' + frame + ' itself');
-      assert.strictEqual(out.length, 32, frame);
-      for (const row of out) assert.strictEqual(row.length, 32, frame);
+      assert.strictEqual(out.length, rows.length, frame);
+      for (const row of out) assert.strictEqual(row.length, rows.length, frame);
       if (/_cap$/.test(frame)) {
         assert.strictEqual(out, rows, frame + ' already wears the nightcap');
         continue;
@@ -90,9 +90,9 @@ test('an upright hat rests on the head, not in the air', () => {
       const out = Hats.dress(Sprites.FRAMES[frame], name, frame);
       // The lowest row holding a hat colour must have Pip's body right below it.
       let low = -1;
-      for (let r = 0; r < 32; r++) if (/[a-z]/.test(out[r])) low = r;
+      for (let r = 0; r < out.length; r++) if (/[a-z]/.test(out[r])) low = r;
       const touches = [...out[low]].some((ch, c) =>
-        /[a-z]/.test(ch) && low + 1 < 32 && 'BLHDO'.includes(out[low + 1][c]));
+        /[a-z]/.test(ch) && low + 1 < out.length && 'BLHDO'.includes(out[low + 1][c]));
       assert.ok(touches, name + ' floats above Pip on ' + frame);
     }
   }
@@ -103,6 +103,22 @@ test('the sideways frames Hats turns are exactly the rotated poses', () => {
     assert.strictEqual(Hats.ROTATED.test(frame), spec.rotate === -90,
       frame + ': hats.js and frame-specs.js disagree on whether it is sideways');
     assert.ok(spec.rotate !== 90, frame + ' turns the other way, which hats.js does not handle');
+  }
+});
+
+test('on a finer art grid a hat is the same hat, just in finer pixels', () => {
+  // Doubling the art grid must not move or resize a hat on screen: dressing
+  // a frame drawn at 64x64 gives exactly the 32x32 result, doubled.
+  const double = (rows) => rows.flatMap((row) => {
+    const wide = [...row].map((ch) => ch + ch).join('');
+    return [wide, wide];
+  });
+  for (const name of WEARING) {
+    for (const frame of ['idle_0', 'sit_0', 'land_0', 'climb_0', 'juggle_1']) {
+      const rows = Sprites.FRAMES[frame];
+      assert.deepStrictEqual(Hats.dress(double(rows), name, frame),
+        double(Hats.dress(rows, name, frame)), name + ' on a doubled ' + frame);
+    }
   }
 });
 
