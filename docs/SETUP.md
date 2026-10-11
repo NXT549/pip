@@ -114,7 +114,7 @@ that off in Settings), and keeps its data in `%APPDATA%\Pip`.
 
 ## macOS
 
-Supported on Apple silicon and Intel Macs.
+Supported on Apple silicon and Intel Macs running macOS 12 (Monterey) or later.
 
 ### 1. Install Node.js and Git
 

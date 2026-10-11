@@ -19,7 +19,7 @@ never steal focus, and never appear in Alt+Tab (or the Dock and ⌘-Tab on a Mac
 | Your computer | Download | Then |
 |---|---|---|
 | **Windows 10 or 11** | **[Pip-Setup-1.2.0.exe](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-Setup-1.2.0.exe)** | [Install on Windows](#on-windows) |
-| **Mac** (Apple silicon or Intel) | **[Pip-1.2.0-universal.dmg](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-1.2.0-universal.dmg)** | [Install on a Mac](#on-a-mac) |
+| **Mac** (macOS 12 or later, Apple silicon or Intel) | **[Pip-1.2.0-universal.dmg](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-1.2.0-universal.dmg)** | [Install on a Mac](#on-a-mac) |
 | Linux | Not supported. You can still [run him from source](docs/SETUP.md#linux). | |
 
 Prefer not to install anything on Windows?

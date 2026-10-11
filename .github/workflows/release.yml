@@ -76,6 +76,11 @@ jobs:
             *x86_64*arm64*|*arm64*x86_64*) ;;
             *) echo "::error::The Mac build is not universal, so it would not run on every Mac."; exit 1 ;;
           esac
+          minos="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")"
+          echo "Pip.app needs macOS $minos or later"
+          if [ "${minos%%.*}" -gt 12 ]; then
+            echo "::error::Pip.app needs macOS $minos, so it would not open on macOS 12 (Monterey)."; exit 1
+          fi
           codesign --verify --deep --strict "$app"
           hdiutil verify "dist/Pip-$version-universal.dmg"
       - name: Attach it to the release

@@ -202,3 +202,11 @@ test('the README links the Mac .dmg the Release workflow attaches', () => {
   assert.match(release, /npm run dist:mac -- --universal/);
   assert.match(release, /gh release upload "\$TAG" --clobber "dist\/Pip-\$version-universal\.dmg"/);
 });
+
+test('Electron stays on a version that still runs on macOS 12', () => {
+  // Electron 44 dropped macOS 12 (Monterey), so a Pip built on it refuses
+  // to open there. Move past 43 only once Monterey is dropped on purpose,
+  // with the README and docs/SETUP.md saying so.
+  const electron = JSON.parse(read('package.json')).devDependencies.electron;
+  assert.ok(Number(electron.split('.')[0]) <= 43, 'electron ' + electron + ' needs macOS 13 or later');
+});

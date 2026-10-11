@@ -60,6 +60,10 @@ jobs:
           esac
           codesign --verify --deep --strict --verbose=2 "$app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist")" = true
+          # Pip supports macOS 12 (Monterey), which Electron 44 dropped.
+          minos="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")"
+          echo "needs macOS $minos or later"
+          test "${minos%%.*}" -le 12
           test "$(ls dist/*.dmg | wc -l)" -eq 1
           hdiutil verify dist/*.dmg
       - name: Smoke test the packaged app on both chips
