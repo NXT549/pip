@@ -35,7 +35,9 @@ jobs:
       - name: Smoke test from source
         run: npm run smoke
       - name: Build Pip.app and the .dmgs
-        run: npm run dist:mac -- --arm64 --x64
+        # --publish never: on a push to main electron-builder sees CI and
+        # tries to publish to GitHub on its own, which fails the job.
+        run: npm run dist:mac -- --arm64 --x64 --publish never
         env:
           # electron-builder skips signing on pull requests to keep real
           # certificates away from forks. Pip only ever signs ad hoc, and an
@@ -66,6 +68,23 @@ jobs:
             fi
             node scripts/smoke.js "$bin"
           done
+      # The Release workflow ships this one universal .dmg, so build and
+      # check it here too rather than finding out on release day.
+      - name: Build the universal .dmg the Release workflow ships
+        run: |
+          npm run dist:mac -- --universal --publish never
+          version="$(node -p "require('./package.json').version")"
+          app=dist/mac-universal/Pip.app
+          archs="$(lipo -archs "$app/Contents/MacOS/Pip")"
+          echo "Pip.app is built for: $archs"
+          case "$archs" in
+            *x86_64*arm64*|*arm64*x86_64*) ;;
+            *) echo "::error::The universal Mac build is missing an architecture."; exit 1 ;;
+          esac
+          codesign --verify --deep --strict "$app"
+          hdiutil verify "dist/Pip-$version-universal.dmg"
+        env:
+          CSC_FOR_PULL_REQUEST: 'true'
       - uses: actions/upload-artifact@v4
         with:
           name: Pip-mac

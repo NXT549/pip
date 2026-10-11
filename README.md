@@ -19,7 +19,7 @@ never steal focus, and never appear in Alt+Tab (or the Dock and ⌘-Tab on a Mac
 | Your computer | Download | Then |
 |---|---|---|
 | **Windows 10 or 11** | **[Pip-Setup-1.2.0.exe](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-Setup-1.2.0.exe)** | [Install on Windows](#on-windows) |
-| **Mac** (Apple silicon or Intel) | **[The `.dmg` on the 1.2.0 release page](https://github.com/NXT549/pip/releases/tag/v1.2.0)**, under **Assets** | [Install on a Mac](#on-a-mac) |
+| **Mac** (Apple silicon or Intel) | **[Pip-1.2.0-universal.dmg](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-1.2.0-universal.dmg)** | [Install on a Mac](#on-a-mac) |
 | Linux | Not supported. You can still [run him from source](docs/SETUP.md#linux). | |
 
 Prefer not to install anything on Windows?
@@ -57,7 +57,8 @@ anywhere and double-click it. It never registers itself to launch at login.
 
 ### On a Mac
 
-1. Open the `.dmg` and drag **Pip** onto the **Applications** folder.
+1. Open **`Pip-1.2.0-universal.dmg`** and drag **Pip** onto the
+   **Applications** folder.
 2. Start Pip from Launchpad or Spotlight. The first time, macOS says it could
    not verify Pip, because he is a free app that is not registered with
    Apple. Click **Done** (not Move to Trash).

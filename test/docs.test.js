@@ -190,3 +190,15 @@ test("the README's download links point at the current version", () => {
     assert.ok(file.includes(version), file + ' is not named for v' + version);
   }
 });
+
+test('the README links the Mac .dmg the Release workflow attaches', () => {
+  // The release only ever gets the universal .dmg, so a Mac link to any
+  // other file name is a dead link.
+  const version = JSON.parse(read('package.json')).version;
+  const dmg = 'Pip-' + version + '-universal.dmg';
+  assert.ok(read('README.md').includes('releases/download/v' + version + '/' + dmg),
+    'README has no direct link to ' + dmg);
+  const release = read('.github/workflows/release.yml');
+  assert.match(release, /npm run dist:mac -- --universal/);
+  assert.match(release, /gh release upload "\$TAG" --clobber "dist\/Pip-\$version-universal\.dmg"/);
+});
