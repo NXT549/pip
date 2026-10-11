@@ -23,6 +23,13 @@
 
 ### Fixed
 
+- **The Mac download.** The Release workflow built an Apple-silicon-only
+  `.dmg`, refused it, and so never attached one, leaving the README's Mac
+  link pointing at a release page with no `.dmg`. It now builds a
+  universal `Pip-<version>-universal.dmg` that runs on Apple silicon and
+  Intel, and the README links straight to it. CI builds and checks the same
+  `.dmg` on every PR, and no longer fails on `main` when electron-builder
+  tries to publish by itself.
 - The tray tooltip said `(longBreak)`. It now reads like
   "Pip: long break, 12 min left".
 - With **exhausted** set lower than **drowsy**, Pip went exhausted without
