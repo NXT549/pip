@@ -15,7 +15,7 @@
 const path = require('path');
 const {
   app, BrowserWindow, Tray, Menu, ipcMain, screen,
-  nativeImage, powerMonitor, Notification
+  nativeImage, powerMonitor, Notification, dialog
 } = require('electron');
 
 const logger = require('./main/logger.js');
@@ -189,12 +189,57 @@ function runApp(store) {
     return SCALE_BY_SIZE[store.get('petSize')] || 4;
   }
 
+  /**
+   * The display Pip lives on: the one he is on now, else the one he was on
+   * when Pip last ran, else the primary. The saved one is matched by id and
+   * then by its bounds, because Windows can renumber displays across a reboot
+   * or a dock, and a monitor still in the same place is still "his".
+   */
   function targetDisplay() {
+    const all = screen.getAllDisplays();
     if (currentDisplayId !== null) {
-      const found = screen.getAllDisplays().find((d) => d.id === currentDisplayId);
+      const found = all.find((d) => d.id === currentDisplayId);
       if (found) return found;
     }
+    const saved = store.get('display');
+    if (saved && saved.width > 0) {
+      const sameId = all.find((d) => d.id === saved.id);
+      if (sameId) return sameId;
+      const samePlace = all.find((d) => d.bounds.x === saved.x && d.bounds.y === saved.y &&
+        d.bounds.width === saved.width && d.bounds.height === saved.height);
+      if (samePlace) return samePlace;
+    }
     return screen.getPrimaryDisplay();
+  }
+
+  /** Note which display Pip is on, on disk too, so a restart keeps him there. */
+  function rememberDisplay(display) {
+    currentDisplayId = display.id;
+    const b = display.bounds;
+    const saved = store.get('display');
+    if (saved && saved.id === display.id && saved.x === b.x && saved.y === b.y &&
+        saved.width === b.width && saved.height === b.height) return;
+    store.set({ display: { id: display.id, x: b.x, y: b.y, width: b.width, height: b.height } });
+  }
+
+  /**
+   * Size the overlay to a work area. Windows sizes a window for the scale
+   * factor of the display it is leaving, so moving it onto a monitor with
+   * different scaling (a 150% laptop beside a 100% monitor) lands it the wrong
+   * size, and Pip walks off an edge he cannot see or stops short of one. The
+   * second pass happens on the right display and comes out right.
+   */
+  function placeOverlay(wa) {
+    const want = { x: wa.x, y: wa.y, width: wa.width, height: wa.height };
+    // On Windows a non-resizable window can refuse setBounds, so briefly allow it.
+    overlay.setResizable(true);
+    overlay.setBounds(want);
+    const got = overlay.getBounds();
+    if (got.x !== want.x || got.y !== want.y || got.width !== want.width || got.height !== want.height) {
+      logger.info('overlay landed at the wrong size, placing it again', { want: want, got: got });
+      overlay.setBounds(want);
+    }
+    overlay.setResizable(false);
   }
 
   /**
@@ -203,12 +248,8 @@ function runApp(store) {
    */
   function fitToDisplay(display) {
     if (!overlay || overlay.isDestroyed()) return;
-    const wa = display.workArea;
-    currentDisplayId = display.id;
-    // On Windows a non-resizable window can refuse setBounds, so briefly allow it.
-    overlay.setResizable(true);
-    overlay.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height });
-    overlay.setResizable(false);
+    rememberDisplay(display);
+    placeOverlay(display.workArea);
     overlay.setAlwaysOnTop(true, 'floating');
     sendBounds();
   }
@@ -536,11 +577,12 @@ function runApp(store) {
       persistStreak();
     }
 
-    // Away for five minutes or more and Pip curls up. A suspended or locked
-    // machine stays asleep regardless of what the idle counter says - right
-    // after a lock it reads near zero, which used to wake Pip straight back up.
+    // Away for `sleepAfter` minutes (five unless changed) and Pip curls up. A
+    // suspended or locked machine stays asleep regardless of what the idle
+    // counter says - right after a lock it reads near zero, which used to wake
+    // Pip straight back up.
     const wasAsleep = world.asleep;
-    if (!world.held) world.asleep = world.systemAsleep || idleSeconds >= 300;
+    if (!world.held) world.asleep = world.systemAsleep || idleSeconds >= store.get('sleepAfter') * 60;
     if (wasAsleep && !world.asleep) onWakeUp();
 
     if (!world.asleep) {
@@ -704,7 +746,7 @@ function runApp(store) {
   function createOverlay() {
     const display = targetDisplay();
     const wa = display.workArea;
-    currentDisplayId = display.id;
+    rememberDisplay(display);
 
     overlay = new BrowserWindow({
       x: wa.x, y: wa.y, width: wa.width, height: wa.height,
@@ -731,6 +773,9 @@ function runApp(store) {
       }
     });
 
+    // Opening straight onto a display scaled differently from the primary
+    // has the same Windows sizing problem as moving there later.
+    placeOverlay(wa);
     overlay.setAlwaysOnTop(true, 'floating');
     if (IS_MAC) {
       // A Mac keeps a window on the Space it opened on, and off every
@@ -1484,6 +1529,13 @@ function runApp(store) {
    */
   function applyLoginItem() {
     if (!app.isPackaged || IS_PORTABLE || IS_DEV || IS_SMOKE) return;
+    // A Mac app opened from the disk image or Downloads runs from a random,
+    // temporary copy (App Translocation). Registering that would start a
+    // Pip that no longer exists at the next login.
+    if (IS_MAC && !app.isInApplicationsFolder()) {
+      logger.info('not in Applications, so no login item');
+      return;
+    }
     try {
       app.setLoginItemSettings({
         openAtLogin: !!store.get('launchAtLogin'),
@@ -1493,6 +1545,38 @@ function runApp(store) {
     } catch (err) {
       logger.warn('could not set the login item', err);
     }
+  }
+
+  /**
+   * Offer to move a Mac Pip that is running from the disk image or Downloads
+   * into Applications. Run from there he cannot start at login, and the disk
+   * image cannot be ejected while he is open. Moving relaunches him.
+   */
+  function offerMoveToApplications() {
+    if (!IS_MAC || !app.isPackaged || IS_DEV || IS_SMOKE) return;
+    if (store.get('moveDeclined') || app.isInApplicationsFolder()) return;
+    bringForward();
+    dialog.showMessageBox({
+      type: 'question',
+      message: 'Move Pip to your Applications folder?',
+      detail: 'Pip is running from ' + (/\/Volumes\//.test(app.getAppPath()) ? 'the disk image' : 'outside Applications') +
+        '. In Applications he can start when you log in, and stays put when the download is cleared away.',
+      buttons: ['Move to Applications', 'Not now'],
+      defaultId: 0,
+      cancelId: 1,
+      checkboxLabel: 'Don\'t ask again'
+    }).then((res) => {
+      if (res.response === 0) {
+        persistStreak();
+        try {
+          app.moveToApplicationsFolder();
+        } catch (err) {
+          logger.warn('could not move to Applications', err);
+        }
+      } else if (res.checkboxChecked) {
+        store.set({ moveDeclined: true });
+      }
+    }).catch((err) => logger.warn('move to Applications prompt failed', err));
   }
 
   /* ---------------------------------------------------------------- *
@@ -1600,6 +1684,7 @@ function runApp(store) {
     startBrain();
     startIdlePolling();
     startWakeWatch();
+    offerMoveToApplications();
 
     if (IS_SMOKE) {
       setTimeout(() => {

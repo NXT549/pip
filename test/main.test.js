@@ -47,10 +47,19 @@ function emitter(target) {
  *                          start: the clock's starting time,
  *                          platform: process.platform as main.js sees it,
  *                          smoke: boot with --smoke, as the smoke test does,
- *                          env: environment variables main.js sees as it loads}
+ *                          env: environment variables main.js sees as it loads,
+ *                          displays: the displays the fake screen has, primary first,
+ *                          dpiSlip: the first setBounds lands a window this
+ *                            much too large, as Windows does across scale factors,
+ *                          inApplications: whether a Mac Pip is in Applications,
+ *                          moveAnswer: what the Move to Applications prompt answers}
  */
 async function boot(t, opts) {
-  const o = Object.assign({ dev: false, data: {}, start: START, platform: 'win32', smoke: false, env: {} }, opts);
+  const o = Object.assign({
+    dev: false, data: {}, start: START, platform: 'win32', smoke: false, env: {},
+    displays: null, dpiSlip: 1, inApplications: true,
+    moveAnswer: { response: 1, checkboxChecked: false }
+  }, opts);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pip-main-'));
   const userData = o.dev ? path.join(root, 'Pip-dev') : root;
   fs.mkdirSync(userData, { recursive: true });
@@ -76,14 +85,16 @@ async function boot(t, opts) {
     notifications: [],   // titles of the notifications shown
     calls: [],           // Electron calls only some platforms make, by name
     smokeOut: [],        // the SMOKE lines a smoke run prints
+    dialogs: [],         // the message boxes shown
     userData: userData
   };
 
-  const display = {
+  h.displays = o.displays || [{
     id: 1,
     bounds: { x: 0, y: 0, width: 1280, height: 720 },
     workArea: { x: 0, y: 0, width: 1280, height: 672 }
-  };
+  }];
+  h.dropDisplay = h.displays[0];
 
   class FakeWindow {
     constructor(options) {
@@ -108,7 +119,14 @@ async function boot(t, opts) {
     loadFile() {}
     setResizable() {}
     getBounds() { return Object.assign({}, this.bounds); }
-    setBounds(b) { this.bounds = Object.assign({}, b); }
+    setBounds(b) {
+      // Windows' slip only hits the first move onto a differently scaled display.
+      const slip = this.slipped ? 1 : o.dpiSlip;
+      this.slipped = true;
+      this.bounds = Object.assign({}, b, {
+        width: Math.round(b.width * slip), height: Math.round(b.height * slip)
+      });
+    }
     showInactive() { this.visible = true; }
     show() { this.visible = true; }
     hide() { this.visible = false; }
@@ -146,7 +164,10 @@ async function boot(t, opts) {
       disableHardwareAcceleration() {},
       whenReady: () => Promise.resolve(),
       getVersion: () => '0.0.0-test',
-      setLoginItemSettings() {},
+      getAppPath: () => '/Volumes/Pip/Pip.app/Contents/Resources/app.asar',
+      isInApplicationsFolder: () => o.inApplications,
+      moveToApplicationsFolder: () => { h.calls.push('moveToApplicationsFolder'); return true; },
+      setLoginItemSettings: (settings) => h.calls.push('login ' + settings.openAtLogin),
       quit() {},
       exit: (code) => h.calls.push('exit ' + code)
     }),
@@ -158,9 +179,9 @@ async function boot(t, opts) {
       handle: (channel, fn) => { h.ipc[channel] = fn; }
     },
     screen: emitter({
-      getAllDisplays: () => [display],
-      getPrimaryDisplay: () => display,
-      getDisplayNearestPoint: () => display,
+      getAllDisplays: () => h.displays.slice(),
+      getPrimaryDisplay: () => h.displays[0],
+      getDisplayNearestPoint: () => h.dropDisplay,
       getCursorScreenPoint: () => Object.assign({}, h.cursor)
     }),
     nativeImage: {
@@ -168,7 +189,10 @@ async function boot(t, opts) {
       createEmpty: () => ({ isEmpty: () => true })
     },
     powerMonitor: Object.assign(h.power, { getSystemIdleTime: () => h.idleSeconds }),
-    Notification: FakeNotification
+    Notification: FakeNotification,
+    dialog: {
+      showMessageBox: (options) => { h.dialogs.push(options); return Promise.resolve(o.moveAnswer); }
+    }
   };
   // app.on and powerMonitor.on are what main.js registers with.
   h.appEvents = electron.app;
@@ -674,5 +698,106 @@ test('a visible Pip does not also send a notification for water', async (t) => {
   h.tick(11 * MINUTE);
   assert.ok(h.said().some((l) => Lines.variants('water_due').includes(l)));
   assert.ok(!h.notifications.includes('Water break'));
+  h.assertHealthy();
+});
+
+/** A laptop with a second monitor to its right, both with a taskbar along the bottom. */
+const LAPTOP = {
+  id: 1,
+  bounds: { x: 0, y: 0, width: 1280, height: 720 },
+  workArea: { x: 0, y: 0, width: 1280, height: 672 }
+};
+const MONITOR = {
+  id: 2,
+  bounds: { x: 1280, y: 0, width: 1920, height: 1080 },
+  workArea: { x: 1280, y: 0, width: 1920, height: 1040 }
+};
+const SAVED_MONITOR = { id: 2, x: 1280, y: 0, width: 1920, height: 1080 };
+
+test('Pip comes back on the monitor he was on when Pip last ran', async (t) => {
+  const h = await boot(t, { displays: [LAPTOP, MONITOR], data: { display: SAVED_MONITOR } });
+  assert.deepStrictEqual(h.overlay.getBounds(), MONITOR.workArea,
+    'Pip opened on the primary display rather than the one he was left on');
+  h.assertHealthy();
+});
+
+test('a monitor Windows has renumbered is still found by where it is', async (t) => {
+  const renumbered = Object.assign({}, MONITOR, { id: 7 });
+  const h = await boot(t, { displays: [LAPTOP, renumbered], data: { display: SAVED_MONITOR } });
+  assert.deepStrictEqual(h.overlay.getBounds(), MONITOR.workArea);
+  assert.strictEqual(h.saved().display.id, 7, 'the new id was not remembered');
+  h.assertHealthy();
+});
+
+test('with his monitor unplugged, Pip opens on the primary display', async (t) => {
+  const h = await boot(t, { displays: [LAPTOP], data: { display: SAVED_MONITOR } });
+  assert.deepStrictEqual(h.overlay.getBounds(), LAPTOP.workArea);
+  assert.strictEqual(h.saved().display.id, 1);
+  h.assertHealthy();
+});
+
+test('dropping Pip on another monitor is remembered for next time', async (t) => {
+  const h = await boot(t, { displays: [LAPTOP, MONITOR] });
+  h.fire('pip:grabbed', {});
+  h.dropDisplay = MONITOR;
+  h.cursor = { x: 2000, y: 500 };
+  h.fire('pip:dropped', { x: 700, speed: 0, height: 0 });
+  assert.deepStrictEqual(h.overlay.getBounds(), MONITOR.workArea);
+  assert.deepStrictEqual(h.saved().display, SAVED_MONITOR);
+  h.assertHealthy();
+});
+
+test('an overlay Windows sizes for the wrong scale factor is placed again', async (t) => {
+  // A 150% laptop and a 100% monitor: the first setBounds comes out 1.5x.
+  const h = await boot(t, { displays: [LAPTOP, MONITOR], data: { display: SAVED_MONITOR }, dpiSlip: 1.5 });
+  assert.deepStrictEqual(h.overlay.getBounds(), MONITOR.workArea,
+    'the overlay kept the size Windows gave it, wider than the monitor it is on');
+  h.assertHealthy();
+});
+
+test('Pip naps after the sleepAfter setting, not a fixed five minutes', async (t) => {
+  const h = await boot(t, { data: { sleepAfter: 30 } });
+  h.idleSeconds = 10 * 60;
+  h.tick(10000);
+  assert.notStrictEqual(h.lastState().state, 'sleeping', 'Pip slept after 10 minutes with sleepAfter at 30');
+  h.idleSeconds = 30 * 60;
+  h.tick(10000);
+  assert.strictEqual(h.lastState().state, 'sleeping');
+  h.idleSeconds = 0;
+  h.tick(2000);
+  assert.notStrictEqual(h.lastState().state, 'sleeping', 'Pip did not wake when you came back');
+  h.assertHealthy();
+});
+
+test('a Mac Pip run from the disk image offers to move to Applications', async (t) => {
+  const h = await boot(t, { platform: 'darwin', inApplications: false, moveAnswer: { response: 0, checkboxChecked: false } });
+  assert.strictEqual(h.dialogs.length, 1, 'no Move to Applications prompt');
+  assert.match(h.dialogs[0].detail, /disk image/);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(h.calls.includes('moveToApplicationsFolder'), 'Move to Applications did not move him');
+  assert.ok(!h.calls.some((c) => /^login /.test(c)),
+    'a login item was registered for a copy that is about to disappear');
+  h.assertHealthy();
+});
+
+test('"Don\'t ask again" stops the Move to Applications prompt for good', async (t) => {
+  const h = await boot(t, { platform: 'darwin', inApplications: false, moveAnswer: { response: 1, checkboxChecked: true } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(!h.calls.includes('moveToApplicationsFolder'));
+  assert.strictEqual(h.saved().moveDeclined, true);
+  h.assertHealthy();
+});
+
+test('a Mac Pip in Applications is not asked to move, and gets his login item', async (t) => {
+  const h = await boot(t, { platform: 'darwin' });
+  assert.strictEqual(h.dialogs.length, 0);
+  assert.ok(h.calls.includes('login true'));
+  h.assertHealthy();
+});
+
+test('Windows never sees the Move to Applications prompt', async (t) => {
+  const h = await boot(t, { inApplications: false });
+  assert.strictEqual(h.dialogs.length, 0);
+  assert.ok(h.calls.includes('login true'));
   h.assertHealthy();
 });

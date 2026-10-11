@@ -334,3 +334,18 @@ test('the water goal is clamped, and 0 (no goal) is a real choice', (t) => {
   assert.strictEqual(createStorage(dir, fakeLog()).load().waterGoal, DEFAULTS.waterGoal);
   assert.deepStrictEqual(cleanPatch({ waterGoal: 0 }), { waterGoal: 0 });
 });
+
+test('sleepAfter is clamped to 1-120 minutes, and the remembered display is not user-editable', (t) => {
+  const dir = tempDir(t);
+  writeData(dir, { sleepAfter: 0 });
+  assert.strictEqual(createStorage(dir, fakeLog()).load().sleepAfter, 1, 'Pip would sleep while you type');
+  writeData(dir, { sleepAfter: 9999 });
+  assert.strictEqual(createStorage(dir, fakeLog()).load().sleepAfter, 120);
+  writeData(dir, { sleepAfter: 'never' });
+  assert.strictEqual(createStorage(dir, fakeLog()).load().sleepAfter, DEFAULTS.sleepAfter);
+  writeData(dir, { display: { id: 'two', x: 5 } });
+  const data = createStorage(dir, fakeLog()).load();
+  assert.deepStrictEqual(data.display, { id: 0, x: 5, y: 0, width: 0, height: 0 });
+  assert.deepStrictEqual(cleanPatch({ sleepAfter: 15, display: { id: 3 }, moveDeclined: true }), { sleepAfter: 15 },
+    'the settings window may only change user settings');
+});

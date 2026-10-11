@@ -44,7 +44,18 @@ only one of them does lives in `src/main.js` behind `IS_MAC` or a
 Dock and Cmd-Tab (`app.dock.hide()` from source, `LSUIElement` in the built
 app), shows on every Space and over full-screen apps, opens his menu on any
 click of the menu bar icon, and treats opening Pip.app again (`activate`) like
-a second launch on Windows (`second-instance`).
+a second launch on Windows (`second-instance`). A packaged Mac Pip running from
+outside Applications (the disk image, or a translocated copy from Downloads)
+offers once per launch to move there (`app.moveToApplicationsFolder`), unless
+told not to ask again (`moveDeclined`), and registers no login item until it
+is there.
+
+**Displays**: the overlay covers the work area of one display. Main remembers
+it in `display: { id, x, y, width, height }` and reopens there, matching by id
+and then by bounds (Windows renumbers displays), else the primary. Every
+`setBounds` on the overlay is checked and repeated once if it landed the wrong
+size, which Windows does when moving between displays with different scale
+factors.
 
 ---
 
@@ -383,7 +394,7 @@ intervals, so system sleep can never skew a Pomodoro or a work streak.
 | exhausted | 90 min (configurable) |
 | water | every 45 active minutes (configurable); daily count resets at local midnight. The glass that reaches `waterGoal` (8, 0 for none) is celebrated. While Pip is hidden, the reminder is also a notification |
 | pomodoro | 25 / 5, long break 15 after every 4 (all configurable). `pomodoro-skip` ends a break early and starts the next work block now; it never skips work |
-| sleeping | you have been away ≥ 5 min |
+| sleeping | you have been away ≥ `sleepAfter` min (5, configurable 1–120). Breaks still start at 5 min |
 | day roll | at local midnight `today` is filed into `history` (kept 70 days) and reset |
 | seasons | Valentine's (1–14 Feb) `bubblegum`, October `pumpkin`, December `candycane` |
 

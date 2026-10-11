@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Pip remembers his monitor.** On a setup with more than one display he
+  reopens on the one he was last on, rather than always on the primary.
+  He finds it again even when Windows renumbers displays after a reboot or
+  a dock, and falls back to the primary when it is unplugged.
+- **A "naps after" setting** for how long you are away before Pip curls up:
+  5 minutes as before, up to 120. Raise it if he dozes off while you watch
+  videos. Breaks still count from five minutes away.
+- **Move to Applications on a Mac.** Opened straight from the disk image or
+  Downloads, Pip offers to move himself into Applications and relaunch,
+  with a "Don't ask again" box.
+
 - **A daily water goal.** A new setting, eight glasses unless you change
   it (0 turns it off). Settings shows today's glasses against it, and the
   glass that reaches it gets a dance, confetti and a new `water_goal` line
@@ -22,6 +33,15 @@
   Apple silicon and Intel.
 
 ### Fixed
+
+- **Mixed-scaling monitors on Windows.** Moving Pip to, or opening him on,
+  a monitor scaled differently from the main one (a 150% laptop beside a
+  100% monitor) could size his overlay wrong, so he walked off an edge he
+  could not see or stopped short of one. Main now checks every resize and
+  places it again when Windows gets it wrong.
+- **Launch at login on a Mac** registered whatever copy of Pip was running,
+  including a temporary one from the disk image or Downloads that is gone
+  by the next login. It now waits until Pip is in Applications.
 
 - **Pip runs on macOS 12 (Monterey) again.** The Mac app said it needed
   macOS 13, because Electron 44 dropped Monterey. Pip now builds on
@@ -59,6 +79,12 @@
 - `main.test.js` covers the water goal, skipping a break, the tooltip's
   wording, an exhausted threshold below the drowsy one, and the hidden-Pip
   water notification. Its fake Electron now records notifications.
+- `main.test.js` also covers Pip's remembered display (renumbered and
+  unplugged monitors too), a Windows resize that lands the wrong size, the
+  `sleepAfter` setting and the Mac Move to Applications prompt. Its fake
+  Electron can now have several displays, a scale-factor slip and dialogs.
+  `storage.test.js` checks `sleepAfter` is clamped and the display is not
+  user-editable.
 
 - `test/docs.test.js` fails when the README's download links point at a
   release other than the version in `package.json`, so a version bump
