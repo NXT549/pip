@@ -20,7 +20,7 @@
   /** Controls that map straight onto a settings key. */
   const NUMBER_FIELDS = [
     'pomodoroWork', 'pomodoroBreak', 'pomodoroLongBreak', 'pomodoroLongEvery',
-    'drowsyAfter', 'exhaustedAfter', 'waterInterval', 'waterGoal'
+    'drowsyAfter', 'exhaustedAfter', 'waterInterval', 'waterGoal', 'sleepAfter'
   ];
   const SELECT_FIELDS = ['petSize', 'activityLevel'];
   const TOGGLE_FIELDS = ['notifications', 'launchAtLogin', 'compatibilityMode', 'seasonal'];

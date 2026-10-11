@@ -42,6 +42,7 @@ const DEFAULTS = {
   exhaustedAfter: 90,
   waterInterval: 45,
   waterGoal: 8,               // glasses a day; 0 means no goal
+  sleepAfter: 5,              // minutes away before Pip curls up
 
   // persisted runtime state
   onboarded: false,
@@ -51,6 +52,11 @@ const DEFAULTS = {
   quietUntil: 0,
   lastGoodMorning: '',        // local YYYY-MM-DD, so it survives a restart
   lastLateNightNudge: 0,
+  moveDeclined: false,        // Mac: said "don't ask again" to Move to Applications
+
+  // the display Pip was last on, so he comes back to it after a restart.
+  // Ids are not stable everywhere, so its bounds are kept to match on too.
+  display: { id: 0, x: 0, y: 0, width: 0, height: 0 },
 
   // the seasonal flavour Pip was last handed - see src/main/seasons.js
   season: {
@@ -92,7 +98,8 @@ const NUMBER_LIMITS = {
   drowsyAfter: [5, 600],
   exhaustedAfter: [5, 600],
   waterInterval: [5, 600],
-  waterGoal: [0, 20]
+  waterGoal: [0, 20],
+  sleepAfter: [1, 120]
 };
 
 const CHOICES = {

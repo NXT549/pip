@@ -68,7 +68,9 @@ anywhere and double-click it. It never registers itself to launch at login.
    before Sequoia it is quicker: Control-click Pip in Applications, choose
    **Open**, then **Open** again.
 4. Pip lives in the menu bar at the top right. He also starts when you log in
-   — you can turn that off in Settings.
+   — you can turn that off in Settings. If you open him straight from the
+   disk image or Downloads, he offers to move himself into Applications
+   first, because he can only start at login from there.
 
 To remove Pip, quit him from his menu and drag Pip from Applications to the
 Trash.
@@ -143,15 +145,16 @@ cost in CPU.
 **Pip has disappeared.**
 Use **Reset position** from the tray menu. He will drop back in from the top of
 the display he was last on, with the overlay refitted to that display's work
-area. If that monitor has been unplugged, Pip falls back to the primary one.
+area. Pip remembers that display when he restarts too. If that monitor has
+been unplugged, Pip falls back to the primary one.
 
 **Pip falls asleep while I am watching a video.**
 Pip measures activity with the system idle timer, which counts keyboard and
 mouse input. Watching a video without touching anything looks exactly like
 being away, so after five minutes he curls up. Nudge the mouse and he wakes and
-greets you. There is no setting for this — the five-minute threshold is fixed,
-and the activity level only changes how often he wanders, not when he sleeps.
-If it bothers you, hide him from the tray while you watch.
+greets you. To give him longer, raise **Settings → Looking after you → Pip naps after
+you are away for** (5 minutes unless you change it, up to 120). Breaks still
+count from five minutes away.
 
 **Pip changed colour on his own.**
 That is a seasonal flavour, and he changes back when the season ends. To keep
