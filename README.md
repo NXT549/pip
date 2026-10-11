@@ -58,7 +58,8 @@ anywhere and double-click it. It never registers itself to launch at login.
 ### On a Mac
 
 1. Open **`Pip-1.2.0-universal.dmg`** and drag **Pip** onto the
-   **Applications** folder.
+   **Applications** folder. It is one universal file that runs on Apple
+   silicon and Intel alike.
 2. Start Pip from Launchpad or Spotlight. The first time, macOS says it could
    not verify Pip, because he is a free app that is not registered with
    Apple. Click **Done** (not Move to Trash).
@@ -259,8 +260,9 @@ CI runs `npm test` on every pull request and every push to `main`.
 frame, plays every animation clip in every flavour offscreen, checks that every
 particle kind actually paints pixels and that the walls hold, opens and closes
 the settings window, and exits 0. Any exception, or twenty seconds of silence,
-fails it. This is the check that proves Pip actually runs, as opposed to merely
-compiling.
+fails it (`SMOKE_TIMEOUT_MS` allows longer, for a machine that is emulating
+another chip). This is the check that proves Pip actually runs, as opposed to
+merely compiling.
 
 ### Building the installers
 

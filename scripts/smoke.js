@@ -12,11 +12,16 @@
  * Give it the path to a packaged app's executable to smoke-test the build
  * instead of the source, as CI does with the Mac app:
  *
- *   node scripts/smoke.js dist/mac-arm64/Pip.app/Contents/MacOS/Pip
+ *   node scripts/smoke.js dist/mac-universal/Pip.app/Contents/MacOS/Pip
  *
- * SMOKE_TIMEOUT_MS gives a slow start more than 20 seconds. CI needs it for
- * the Intel Mac app, which Rosetta translates on its first launch before
- * Pip's own code runs at all.
+ * Anything else you pass is part of that command, so CI can also run the
+ * Intel half of the universal Mac app through Rosetta:
+ *
+ *   node scripts/smoke.js arch -x86_64 dist/mac-universal/Pip.app/Contents/MacOS/Pip
+ *
+ * SMOKE_TIMEOUT_MS gives a slow run more than 20 seconds, both here and in
+ * the app's own deadline. CI needs it for the Intel half of the Mac app,
+ * which Rosetta translates as it runs.
  */
 
 'use strict';
@@ -27,13 +32,17 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const TIMEOUT_MS = Number(process.env.SMOKE_TIMEOUT_MS) || 20000;
 
-const packaged = process.argv[2];
+const packaged = process.argv.slice(2);
 let command;
 let args;
 
-if (packaged) {
-  command = path.resolve(packaged);
-  args = ['--smoke'];
+if (packaged.length) {
+  // A path is resolved from where you ran this; a bare name, like `arch`,
+  // is left alone for the OS to find.
+  command = packaged[0].indexOf(path.sep) === -1
+    ? packaged[0]
+    : path.resolve(packaged[0]);
+  args = packaged.slice(1).concat(['--smoke']);
 } else {
   try {
     command = require('electron');
