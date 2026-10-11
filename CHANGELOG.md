@@ -4,16 +4,15 @@
 
 ### Added
 
-- **A more detailed Pip.** Every pose is now drawn on a grid twice as fine
-  (64x64 instead of 32x32), at the same size on screen. He has a smoother
-  bean outline that is fine along the top and heavier underneath, shading
-  that follows his curve, a longer gloss streak with a little dot after
-  it, two highlights in each eye, rounded feet, and redrawn props: a mug
-  with a handle, a striped nightcap with a bobble, a book with pages and a
-  cover, a striped ball, a winged bug and a cookie. The app and tray icons
-  are rebuilt from the new art. Sizes that land on a fractional number of
+- **A more detailed Pip.** Frames are now 64x64 instead of 32x32, at the
+  same size on screen. His chunky body, bold outline and shading are
+  unchanged, and the finer pixels go into the small things: eyes with two
+  highlights, smoother mouths and blush, a glint after the gloss streak,
+  and redrawn props (a mug with a handle, a striped nightcap with a
+  bobble, a book with pages and a cover, a striped ball, a winged bug and
+  a cookie). The app and tray icons are rebuilt from the new art. Sizes that land on a fractional number of
   screen pixels per sprite pixel (such as the small size at 125%) are
-  smoothed rather than snapped, so the finer lines keep an even weight;
+  smoothed rather than snapped, so the fine details keep an even weight;
   every Mac Retina size and Windows at 100% and 200% stay pixel-sharp.
 
 - **A daily water goal.** A new setting, eight glasses unless you change

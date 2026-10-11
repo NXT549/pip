@@ -147,12 +147,14 @@ Rules every frame must satisfy (enforced by `test/sprites.test.js`):
 Geometry conventions (from `tools/gen-sprites.js`, in Pip units unless
 stated):
 
-- body ≈ 23 × 14 units, centred on column 16, a gentle inward dip along the top
+- the body layer (bean, legs, outline, shading) is built on the unit grid and
+  each unit drawn as a `DETAIL × DETAIL` block, so Pip keeps his chunky shape;
+  eyes, mouths, blush, the gloss streak and props are drawn at full sprite
+  resolution on top
+- body ≈ 23 × 14 units, centred on column 16, a gentle 1-unit inward dip along the top
 - near feet rest on unit row 30 (sprite rows 60–61); the far pair land on
   row 29, which is what reads as depth
 - `FOOT_OFFSET = 31` — the renderer sits Pip on the floor using this
-- the outline is one sprite pixel along the top and two below the body's
-  middle; shading bands follow the curve (`L` on top, `D` underneath)
 - the face sits on the front (right) third; eyes are 3×3 units (6×6 sprite
   pixels) with a large `W` highlight up and back and a small one low and
   forward
@@ -449,6 +451,6 @@ flavour, size or activity level falls back to its default.
 - a sprite pixel is `scale × devicePixelRatio / DETAIL` device pixels. When
   that is a whole number, or at least 3, frames are painted pixel for pixel;
   a smaller fractional size is painted at the next whole size and scaled
-  down smoothly, so the one-pixel lines keep an even weight
+  down smoothly, so the one-pixel face details keep an even weight
 - every frame is pre-rendered to an offscreen canvas at startup for the
   current flavour and scale, and re-rendered when either changes

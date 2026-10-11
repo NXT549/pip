@@ -6,10 +6,13 @@
  * jellybean silhouette, leg poses, faces, props) and written out as literal
  * 64-string arrays into src/renderer/sprites.js.
  *
- * Poses are still laid out on Pip's original 32x32 grid: every number in
- * tools/frame-specs.js is in those "Pip units". Each unit is drawn as a
- * DETAIL x DETAIL block of finer pixels, which is what leaves room for the
- * thin outline, the shading, two-highlight eyes and detailed props.
+ * Pip is built in two layers. His body - the chunky bean, the legs, the
+ * bold outline and the shading bands - is drawn on his original 32x32 grid
+ * of "Pip units" and every unit is blown up to a DETAIL x DETAIL block, so
+ * he keeps his blocky pixel-art shape. The small things - eyes, mouths,
+ * blush, the gloss streak and props - are then drawn at the full sprite
+ * resolution on top, which is where the extra detail goes. Every number in
+ * tools/frame-specs.js is in Pip units.
  *
  * Once emitted, src/renderer/sprites.js is the source of truth - it is plain
  * readable data and you can edit any frame by hand. Re-running this tool
@@ -30,19 +33,24 @@ const SIZE = UNITS * DETAIL;
 const T = '.'; // transparent
 
 /* ------------------------------------------------------------------ *
- * Grid helpers (all in sprite pixels)
+ * Grid helpers. Each takes the grid size `n` it works on: UNITS for the
+ * body layer, SIZE for the detail layer.
  * ------------------------------------------------------------------ */
 
-function newGrid() {
-  return Array.from({ length: SIZE }, () => new Array(SIZE).fill(T));
+function newGrid(n) {
+  return Array.from({ length: n }, () => new Array(n).fill(T));
 }
 
-function inBounds(r, c) {
-  return r >= 0 && r < SIZE && c >= 0 && c < SIZE;
+function newMask(n) {
+  return Array.from({ length: n }, () => new Array(n).fill(false));
+}
+
+function inBounds(r, c, n) {
+  return r >= 0 && r < n && c >= 0 && c < n;
 }
 
 function put(grid, r, c, ch) {
-  if (inBounds(r, c)) grid[r][c] = ch;
+  if (inBounds(r, c, grid.length)) grid[r][c] = ch;
 }
 
 /**
@@ -57,20 +65,13 @@ function stamp(grid, r, c, rows) {
   });
 }
 
-function newMask() {
-  return Array.from({ length: SIZE }, () => new Array(SIZE).fill(false));
-}
-
 /** Union of masks, in place into `into`. */
 function maskUnion(into, other) {
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) if (other[r][c]) into[r][c] = true;
+  const n = into.length;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) if (other[r][c]) into[r][c] = true;
   }
   return into;
-}
-
-function inMask(mask, r, c) {
-  return inBounds(r, c) && mask[r][c];
 }
 
 /**
@@ -78,113 +79,51 @@ function inMask(mask, r, c) {
  * (4-neighbour) or the frame edge.
  */
 function outlineOf(mask) {
-  const out = newMask();
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  const n = mask.length;
+  const out = newMask(n);
+  const on = (r, c) => inBounds(r, c, n) && mask[r][c];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       if (!mask[r][c]) continue;
-      const edge =
-        !inMask(mask, r - 1, c) || !inMask(mask, r + 1, c) ||
-        !inMask(mask, r, c - 1) || !inMask(mask, r, c + 1);
-      if (edge) out[r][c] = true;
+      if (!on(r - 1, c) || !on(r + 1, c) || !on(r, c - 1) || !on(r, c + 1)) out[r][c] = true;
     }
   }
   return out;
 }
 
-/**
- * Shave the outer corner off every stair-step in a silhouette.
- *
- * A one-pixel outline traced round a curve doubles up at every diagonal
- * step, which reads as a lumpy, heavier line. Removing the corner pixel
- * where two outline runs meet at a right angle (and the corner points
- * outwards) leaves a clean single-pixel diagonal. Only corners whose two
- * outer sides are both empty are touched, so no fill pixel is ever exposed.
- */
-function smoothCorners(mask) {
-  mask = trimSpurs(mask);
-  const out = mask.map((row) => row.slice());
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (!mask[r][c]) continue;
-      const up = inMask(mask, r - 1, c);
-      const down = inMask(mask, r + 1, c);
-      const left = inMask(mask, r, c - 1);
-      const right = inMask(mask, r, c + 1);
-      const n = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
-      if (n !== 2 || (up && down) || (left && right)) continue;
-      // the pixel diagonally inwards has to be filled, or this is a thin
-      // spur rather than a corner and removing it would cut the shape
-      const dr = up ? -1 : 1;
-      const dc = left ? -1 : 1;
-      if (!inMask(mask, r + dr, c + dc)) continue;
-      out[r][c] = false;
-    }
-  }
-  return out;
-}
-
-/**
- * Drop lone pixels that stick out of a silhouette by one pixel (at most one
- * filled neighbour). Sampling the dip in the bean's back can leave a single
- * column a pixel taller than its neighbours, which reads as a stray whisker.
- */
-function trimSpurs(mask) {
-  const out = mask.map((row) => row.slice());
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (!mask[r][c]) continue;
-      const n = (inMask(mask, r - 1, c) ? 1 : 0) + (inMask(mask, r + 1, c) ? 1 : 0) +
-        (inMask(mask, r, c - 1) ? 1 : 0) + (inMask(mask, r, c + 1) ? 1 : 0);
-      if (n <= 1) out[r][c] = false;
-    }
-  }
-  return out;
+/** Blow a unit grid (or mask) up to sprite pixels, DETAIL x DETAIL per unit. */
+function upscale(grid) {
+  return Array.from({ length: SIZE }, (_, r) =>
+    Array.from({ length: SIZE }, (_, c) => grid[Math.floor(r / DETAIL)][Math.floor(c / DETAIL)]));
 }
 
 /* ------------------------------------------------------------------ *
- * The jellybean silhouette
+ * The jellybean silhouette (Pip units)
  *
  * An ellipse with a localised dip pushed into the top edge, which gives the
  * gentle inward curve along Pip's back without pinching the bean in half.
- * The shape is sampled at every sprite pixel, so the curve is DETAIL times
- * smoother than the Pip-unit grid it is described on.
  * ------------------------------------------------------------------ */
-
-/** Pip-unit position of a sprite pixel's centre. */
-function unitOf(p) {
-  return (p + 0.5) / DETAIL - 0.5;
-}
 
 function beanMask(body) {
   const { cx, cy, w, h } = body;
   const dip = body.dip === undefined ? 3.5 : body.dip;
   const dipW = body.dipW === undefined ? 0.5 : body.dipW;
-  const mask = newMask();
+  const mask = newMask(UNITS);
   const colTop = {};
   const colBot = {};
 
-  // Half a unit of slack each way, so the bean covers the same Pip units
-  // edge to edge as it did when every unit was one pixel.
-  const a = w + 0.5;
-  const b = h + 0.5;
-  for (let c = 0; c < SIZE; c++) {
-    const x = unitOf(c);
-    const t = (x - cx) / a;
-    if (t <= -1 || t >= 1) continue;
-    const e = Math.sqrt(1 - t * t);
-    const td = (x - cx) / w;
-    const top = cy - b * e + dip * Math.exp(-((td / dipW) * (td / dipW)));
-    const bot = cy + b * e;
-    let r0 = -1;
-    let r1 = -1;
-    for (let r = 0; r < SIZE; r++) {
-      const y = unitOf(r);
-      if (y < top || y > bot) continue;
-      mask[r][c] = true;
-      if (r0 < 0) r0 = r;
-      r1 = r;
-    }
-    if (r0 < 0) continue;
+  const c0 = Math.round(cx - w);
+  const c1 = Math.round(cx + w);
+  for (let c = c0; c <= c1; c++) {
+    const t = (c - cx) / w;
+    if (t < -1 || t > 1) continue;
+    const e = Math.sqrt(Math.max(0, 1 - t * t));
+    const top = cy - h * e + dip * Math.exp(-((t / dipW) * (t / dipW)));
+    const bot = cy + h * e;
+    const r0 = Math.round(top);
+    const r1 = Math.round(bot);
+    if (r1 < r0) continue;
+    for (let r = r0; r <= r1; r++) if (inBounds(r, c, UNITS)) mask[r][c] = true;
     colTop[c] = r0;
     colBot[c] = r1;
   }
@@ -192,7 +131,7 @@ function beanMask(body) {
 }
 
 /* ------------------------------------------------------------------ *
- * Legs
+ * Legs (Pip units)
  *
  * Four stubby legs with rounded feet. The two far-side legs sit a little
  * behind and a little higher than the near pair, which is what sells the
@@ -200,32 +139,17 @@ function beanMask(body) {
  * ------------------------------------------------------------------ */
 
 /**
- * A leg `width` units across, from sprite row `top` down to sprite row
- * `foot` (inclusive). The foot pokes forward into a rounded toe and the
- * heel is rounded off, so it reads as a little foot rather than a post.
+ * A leg running from `top` down to `foot` (inclusive), `width` units across.
+ * The foot row gains one extra unit forward, which reads as a rounded
+ * little foot once the outline pass wraps it.
  */
 function legMask(col, top, foot, width) {
-  const mask = newMask();
-  const c0 = col * DETAIL;
-  const c1 = (col + width) * DETAIL - 1;
+  const mask = newMask(UNITS);
   for (let r = top; r <= foot; r++) {
-    for (let c = c0; c <= c1; c++) if (inBounds(r, c)) mask[r][c] = true;
+    for (let c = col; c < col + width; c++) if (inBounds(r, c, UNITS)) mask[r][c] = true;
   }
-  if (foot - top >= DETAIL) {
-    // toe: two rows reach a whole unit forward, the row above half of that
-    for (let i = 1; i <= DETAIL; i++) {
-      put2(mask, foot, c1 + i);
-      put2(mask, foot - 1, c1 + i);
-    }
-    put2(mask, foot - 2, c1 + 1);
-    // heel
-    if (inBounds(foot, c0)) mask[foot][c0] = false;
-  }
+  if (inBounds(foot, col + width, UNITS)) mask[foot][col + width] = true;
   return mask;
-}
-
-function put2(mask, r, c) {
-  if (inBounds(r, c)) mask[r][c] = true;
 }
 
 /* ------------------------------------------------------------------ *
@@ -425,6 +349,9 @@ const PROPS = {
  */
 const PROP_OFFSETS = { nightcap: [-3, -2] };
 
+/** A rosy cheek, under the outer corner of each eye. */
+const BLUSH = ['.KKK', 'KKK.'];
+
 /* ------------------------------------------------------------------ *
  * Frame composition
  * ------------------------------------------------------------------ */
@@ -434,9 +361,83 @@ const DEFAULT_BODY = { cx: 16, cy: 19.5, w: 11, h: 7.4, dip: 2.5, dipW: 0.55 };
 /** Pip-unit row Pip's near feet rest on. The far pair land one row higher (depth). */
 const FLOOR_ROW = 30;
 
-/** Last sprite row of a Pip-unit row. */
-function lastRowOf(unitRow) {
-  return unitRow * DETAIL + DETAIL - 1;
+/**
+ * The body layer, on the unit grid: legs, bean, outline and shading,
+ * exactly as Pip has always been built.
+ */
+function composeBody(body, legs) {
+  const { mask: bodyMask, colTop, colBot } = beanMask(body);
+  const tops = Object.values(colTop);
+  const bots = Object.values(colBot);
+  if (!tops.length) throw new Error('bean silhouette is empty - check body params');
+
+  const bodyTop = Math.min.apply(null, tops);
+  const bodyBottom = Math.max.apply(null, bots);
+
+  const nearBack = Math.round(body.cx - body.w * 0.55) - legs.spread;
+  const nearFront = Math.round(body.cx + body.w * 0.30) + legs.spread;
+
+  const farMaskAll = newMask(UNITS);
+  const nearMaskAll = newMask(UNITS);
+  const legPixels = newMask(UNITS);
+
+  // order: [farBack, farFront, nearBack, nearFront]
+  // The far pair sit 2 units further back and land one row higher, which
+  // is what reads as depth in the three-quarter view.
+  if (legs.mode !== 'none') {
+    const defs = [
+      { x: nearBack - 2 + legs.dx[0], lift: legs.lift[0], far: true },
+      { x: nearFront - 2 + legs.dx[1], lift: legs.lift[1], far: true },
+      { x: nearBack + legs.dx[2], lift: legs.lift[2], far: false },
+      { x: nearFront + legs.dx[3], lift: legs.lift[3], far: false }
+    ];
+    for (const d of defs) {
+      // Attach flush to the belly: take the lowest body row across the
+      // columns this leg covers, then tuck 1 unit up inside the body.
+      let attach = -1;
+      for (let c = d.x; c < d.x + legs.width; c++) {
+        if (colBot[c] !== undefined && colBot[c] > attach) attach = colBot[c];
+      }
+      if (attach < 0) continue;
+      const top = attach - 1;
+      const foot = Math.max(top, (d.far ? legs.floor - 1 : legs.floor) - d.lift);
+      const m = legMask(d.x, top, foot, legs.width);
+      if (d.far) maskUnion(farMaskAll, m);
+      else { maskUnion(nearMaskAll, m); maskUnion(legPixels, m); }
+    }
+  }
+
+  const g = newGrid(UNITS);
+
+  // far legs first, behind everything, one shade darker
+  const farOutline = outlineOf(farMaskAll);
+  for (let r = 0; r < UNITS; r++) {
+    for (let c = 0; c < UNITS; c++) {
+      if (!farMaskAll[r][c]) continue;
+      g[r][c] = farOutline[r][c] ? 'O' : 'F';
+    }
+  }
+
+  // body + near legs share one silhouette so there is no seam between them
+  const near = maskUnion(maskUnion(newMask(UNITS), bodyMask), nearMaskAll);
+  const nearOutline = outlineOf(near);
+
+  for (let r = 0; r < UNITS; r++) {
+    for (let c = 0; c < UNITS; c++) {
+      if (!near[r][c]) continue;
+      if (nearOutline[r][c]) { g[r][c] = 'O'; continue; }
+      if (legPixels[r][c] && !bodyMask[r][c]) {
+        // legs read as being in the body's shadow, feet darker still
+        g[r][c] = r >= legs.floor - 1 ? 'D' : 'B';
+        continue;
+      }
+      if (r <= bodyTop + 1) g[r][c] = 'L';
+      else if (r >= bodyBottom - 3) g[r][c] = 'D';
+      else g[r][c] = 'B';
+    }
+  }
+
+  return { g, near, nearOutline, farOutline, colTop };
 }
 
 /**
@@ -458,109 +459,47 @@ function composeFrame(spec) {
     spec.legs || {}
   );
 
-  const { mask: bodyMask, colTop, colBot } = beanMask(body);
-  if (!Object.keys(colTop).length) throw new Error('bean silhouette is empty - check body params');
-
-  const nearBack = Math.round(body.cx - body.w * 0.55) - legs.spread;
-  const nearFront = Math.round(body.cx + body.w * 0.30) + legs.spread;
-
-  const farMaskAll = newMask();
-  const nearMaskAll = newMask();
-
-  // order: [farBack, farFront, nearBack, nearFront]
-  // The far pair sit 2 units further back and land one unit higher, which
-  // is what reads as depth in the three-quarter view.
-  if (legs.mode !== 'none') {
-    const defs = [
-      { x: nearBack - 2 + legs.dx[0], lift: legs.lift[0], far: true },
-      { x: nearFront - 2 + legs.dx[1], lift: legs.lift[1], far: true },
-      { x: nearBack + legs.dx[2], lift: legs.lift[2], far: false },
-      { x: nearFront + legs.dx[3], lift: legs.lift[3], far: false }
-    ];
-    for (const d of defs) {
-      // Attach flush to the belly: take the lowest body pixel across the
-      // columns this leg covers, then tuck one unit up inside the body.
-      let attach = -1;
-      for (let c = d.x * DETAIL; c < (d.x + legs.width) * DETAIL; c++) {
-        if (colBot[c] !== undefined && colBot[c] > attach) attach = colBot[c];
-      }
-      if (attach < 0) continue;
-      const top = attach - DETAIL;
-      const footRow = (d.far ? legs.floor - 1 : legs.floor) - d.lift;
-      const foot = Math.max(top, lastRowOf(footRow));
-      const m = legMask(d.x, top, foot, legs.width);
-      maskUnion(d.far ? farMaskAll : nearMaskAll, m);
-    }
-  }
-
-  const g = newGrid();
-
-  // far legs first, behind everything, one shade darker
-  const far = smoothCorners(farMaskAll);
-  const farOutline = outlineOf(far);
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (!far[r][c]) continue;
-      g[r][c] = farOutline[r][c] ? 'O' : 'F';
-    }
-  }
-
-  // body + near legs share one silhouette so there is no seam between them
-  const near = smoothCorners(maskUnion(maskUnion(newMask(), bodyMask), nearMaskAll));
-  const nearOutline = outlineOf(near);
-  // The line is heavier on the underside: a second pixel of outline below
-  // the bean's middle grounds Pip and keeps his chunky look, while the lit
-  // top keeps the fine single-pixel line.
-  const heavyFrom = Math.round(body.cy * DETAIL);
-  const inner = near.map((row, r) => row.map((on, c) => on && !nearOutline[r][c]));
-  const innerOutline = outlineOf(inner);
-  for (let r = heavyFrom; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) if (innerOutline[r][c]) nearOutline[r][c] = true;
-  }
-  const footShade = legs.floor * DETAIL - DETAIL;
-
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (!near[r][c]) continue;
-      if (nearOutline[r][c]) { g[r][c] = 'O'; continue; }
-      if (!bodyMask[r][c]) {
-        // legs read as being in the body's shadow, feet darker still
-        g[r][c] = r >= footShade ? 'D' : 'B';
-        continue;
-      }
-      g[r][c] = shadeBody(r, c, colTop, colBot);
-    }
-  }
+  const base = composeBody(body, legs);
+  const g = upscale(base.g);
+  const near = upscale(base.near);
+  const nearOutline = upscale(base.nearOutline);
+  const farOutline = upscale(base.farOutline);
+  const inside = (r, c) => inBounds(r, c, SIZE) && near[r][c] && !nearOutline[r][c];
 
   // ---- the signature gloss streak ----------------------------------
-  // A curved streak riding the top of the back, with a little dot after
-  // it, nudged per pose so the shine survives squash, stretch and rotation.
+  // A three-unit streak on the upper-left of the body, with a small glint
+  // a unit after it, nudged per pose so the shine survives squash, stretch
+  // and rotation. Always at least 2 pixels.
   if (spec.gloss !== 'none') {
     const gl = Object.assign({ dr: 0, dc: 0 }, spec.gloss || {});
-    const glossCol = (Math.round(body.cx - body.w * 0.45) + gl.dc) * DETAIL;
-    const inside = (r, c) => inBounds(r, c) && near[r][c] && !nearOutline[r][c] && bodyMask[r][c];
+    const glossCol = Math.round(body.cx - body.w * 0.45) + gl.dc;
     let placed = 0;
-    const streak = (c, thick) => {
-      const t = colTop[c];
-      if (t === undefined) return;
-      const r = t + DETAIL * 2 + gl.dr * DETAIL;
-      for (let i = 0; i < thick; i++) {
-        if (inside(r + i, c)) { g[r + i][c] = 'H'; placed++; }
-      }
+    const shine = (unitR, unitC, rows) => {
+      rows.forEach((row, dr) => {
+        for (let dc = 0; dc < row.length; dc++) {
+          const r = unitR * DETAIL + dr;
+          const c = unitC * DETAIL + dc;
+          if (row[dc] === 'H' && inside(r, c)) { g[r][c] = 'H'; placed++; }
+        }
+      });
     };
-    // tapered: thin at both ends, two pixels deep along the middle
-    [1, 2, 2, 2, 2, 2, 2, 1].forEach((thick, i) => streak(glossCol + i, thick));
-    // ...and the dot after it
-    streak(glossCol + 10, 2);
-    streak(glossCol + 11, 2);
+    const rowAt = (c) => base.colTop[c] === undefined ? undefined : base.colTop[c] + 2 + gl.dr;
+    for (let i = 0; i < 3; i++) {
+      const r = rowAt(glossCol + i);
+      if (r !== undefined) shine(r, glossCol + i, ['HH', 'HH']);
+    }
+    const glint = rowAt(glossCol + 4);
+    if (glint !== undefined) shine(glint, glossCol + 4, ['HH', '..']);
     if (placed < 2) {
-      const from = Math.round(body.cx - body.w * 0.75) * DETAIL;
-      const to = Math.round(body.cx + body.w * 0.2) * DETAIL;
+      const from = Math.round(body.cx - body.w * 0.75);
+      const to = Math.round(body.cx + body.w * 0.2);
       for (let c = from; c <= to && placed < 4; c++) {
-        const t = colTop[c];
+        const t = base.colTop[c];
         if (t === undefined) continue;
-        for (let r = t + DETAIL; r <= t + DETAIL * 3; r++) {
-          if (inside(r, c) && g[r][c] !== 'H') { g[r][c] = 'H'; placed++; break; }
+        for (let r = t + 2; r <= t + 4; r++) {
+          const before = placed;
+          shine(r, c, ['HH', 'HH']);
+          if (placed > before) break;
         }
       }
     }
@@ -582,9 +521,8 @@ function composeFrame(spec) {
     EYE_STYLES[face.eyes](g, eyeRow * DETAIL, nearEyeCol * DETAIL);
     if (face.blush) {
       const br = (eyeRow + 4) * DETAIL;
-      const cheek = ['.KKK', 'KKK.'];
-      stamp(g, br, (farEyeCol - 1) * DETAIL, cheek);
-      stamp(g, br, (nearEyeCol + 2) * DETAIL, cheek);
+      stamp(g, br, (farEyeCol - 1) * DETAIL, BLUSH);
+      stamp(g, br, (nearEyeCol + 2) * DETAIL, BLUSH);
     }
     MOUTH_STYLES[face.mouth](g, (eyeRow + 4) * DETAIL, (farEyeCol + 2) * DETAIL);
   }
@@ -620,27 +558,13 @@ function composeFrame(spec) {
   return out.map((row) => row.join(''));
 }
 
-/**
- * Body shading. Light catches the top of the bean in a band that follows
- * its curve, the belly falls into shadow along the bottom, and a single
- * row of checkerboard blends each band into the body colour so the bean
- * reads as round rather than striped.
- */
-function shadeBody(r, c, colTop, colBot) {
-  const fromTop = r - colTop[c];
-  const fromBot = colBot[c] - r;
-  if (fromTop <= 3) return 'L';
-  if (fromBot <= 5) return 'D';
-  return 'B';
-}
-
 function rotate90(g) {
-  const o = newGrid();
+  const o = newGrid(SIZE);
   for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) o[c][SIZE - 1 - r] = g[r][c];
   return o;
 }
 function rotate270(g) {
-  const o = newGrid();
+  const o = newGrid(SIZE);
   for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) o[SIZE - 1 - c][r] = g[r][c];
   return o;
 }
