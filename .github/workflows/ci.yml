@@ -36,7 +36,9 @@ jobs:
       - name: Smoke test from source
         run: npm run smoke
       - name: Build Pip.app and the .dmg
-        run: npm run dist:mac
+        # --publish never: on a push to main electron-builder sees CI and
+        # tries to publish to GitHub on its own, which fails the job.
+        run: npm run dist:mac -- --publish never
         env:
           # electron-builder skips signing on pull requests to keep real
           # certificates away from forks. Pip only ever signs ad hoc, and an

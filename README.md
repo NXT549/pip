@@ -19,7 +19,7 @@ never steal focus, and never appear in Alt+Tab (or the Dock and ⌘-Tab on a Mac
 | Your computer | Download | Then |
 |---|---|---|
 | **Windows 10 or 11** | **[Pip-Setup-1.2.0.exe](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-Setup-1.2.0.exe)** | [Install on Windows](#on-windows) |
-| **Mac** (Apple silicon or Intel) | **[Pip-1.2.0-mac.dmg](https://github.com/NXT549/pip/releases/tag/v1.2.0)**, under **Assets** on the release page | [Install on a Mac](#on-a-mac) |
+| **Mac** (Apple silicon or Intel) | **[Pip-1.2.0-universal.dmg](https://github.com/NXT549/pip/releases/download/v1.2.0/Pip-1.2.0-universal.dmg)** | [Install on a Mac](#on-a-mac) |
 | Linux | Not supported. You can still [run him from source](docs/SETUP.md#linux). | |
 
 Prefer not to install anything on Windows?
@@ -35,9 +35,10 @@ Every version, with what changed in each, is on the
 
 ### On Windows
 
-1. Run **`Pip-Setup-1.2.0.exe`**. If your browser says the file is not
-   commonly downloaded, choose **Keep** (in Edge: **…** → **Keep** →
-   **Show more** → **Keep anyway**).
+1. Double-click **`Pip-Setup-1.2.0.exe`** once it has downloaded. It is
+   the whole installer, so there is nothing to unzip. If your browser says
+   the file is not commonly downloaded, choose **Keep** (in Edge: **…** →
+   **Keep** → **Show more** → **Keep anyway**).
 2. Windows will almost certainly show a blue **"Windows protected your PC"**
    box. This is SmartScreen reacting to an installer that has not been
    code-signed — signing certificates cost money and this one is unsigned.
@@ -56,8 +57,9 @@ anywhere and double-click it. It never registers itself to launch at login.
 
 ### On a Mac
 
-1. Open **`Pip-1.2.0-mac.dmg`** and drag **Pip** onto the **Applications**
-   folder. It is one universal file that runs on Apple silicon and Intel alike.
+1. Open **`Pip-1.2.0-universal.dmg`** and drag **Pip** onto the
+   **Applications** folder. It is one universal file that runs on Apple
+   silicon and Intel alike.
 2. Start Pip from Launchpad or Spotlight. The first time, macOS says it could
    not verify Pip, because he is a free app that is not registered with
    Apple. Click **Done** (not Move to Trash).
@@ -106,8 +108,15 @@ finished a Pomodoro or logged a glass of water and brighter the more Pomodoros
 you did, with this week's totals and your current day streak. Hover a square
 for that day's numbers.
 
+Set a **daily water goal** in Settings (eight glasses unless you change it, 0
+for none) and Pip dances when the glass that gets you there goes down. While a
+Pomodoro runs, Settings counts down the time left, and during a break you can
+**Skip break** from either menu to get straight back to work. If you have
+hidden Pip, his water reminders arrive as notifications instead.
+
 The tray icon's right-click menu and Pip's right-click menu are the same:
-Start/Stop Pomodoro, I drank water, Feed Pip, Call Pip, Quiet mode for 1 hour,
+Start/Stop Pomodoro, Skip break (only during a break), I drank water, Feed
+Pip, Call Pip, Quiet mode for 1 hour,
 Show/Hide Pip, Reset position, Settings, Quit. Left-clicking the tray icon
 shows or hides him. On a Mac the icon is in the menu bar, and any click on it
 opens the menu.
@@ -265,8 +274,13 @@ Produces `dist/Pip-Setup-1.2.0.exe` and `dist/Pip-Portable-1.2.0.exe`. Icons are
 regenerated automatically first. On a Mac, `npm run dist:mac` builds Pip.app
 in a `.dmg`; [docs/SETUP.md](docs/SETUP.md#macos) has the details.
 
-To publish a version, attach those files to its GitHub release, and update
-the version in the [Download](#download) links above when you bump it.
+You do not have to upload them yourself. Publishing a release on GitHub
+starts the **Release** workflow, which builds the Windows installer and
+portable build and a universal Mac `.dmg` from that release's tag and
+attaches them to it. To fill a release that already exists, open
+**Actions → Release → Run workflow** and give its tag (for example
+`v1.2.0`). Remember to update the version in the [Download](#download)
+links above when you bump it.
 
 ### How Pip is put together
 
@@ -296,7 +310,7 @@ build/             installer resources for electron-builder
 tools/             the sprite authoring tools
 scripts/           icon generation, the smoke test
 test/              the unit tests
-.github/           CI, issue and PR templates
+.github/           CI, the release workflow, issue and PR templates
 ```
 
 `ARCHITECTURE.md` is the full contract: every exported signature, every IPC

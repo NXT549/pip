@@ -187,3 +187,21 @@ test('missing or zeroed settings fall back instead of making a zero-length block
   assert.strictEqual(pomodoro.phaseDuration('work', { pomodoroWork: 0 }), 25 * MIN);
   assert.strictEqual(pomodoro.cycleDuration(CFG), (4 * 25 + 3 * 5 + 15) * MIN);
 });
+
+test('skipping a break starts the next work block now, and the cycle carries on', () => {
+  const brk = { phase: 'break', startedAt: T0, completed: 2 };
+  assert.deepStrictEqual(pomodoro.skipBreak(brk, T0 + MIN),
+    { phase: 'work', startedAt: T0 + MIN, completed: 2 });
+
+  // the long break closes the cycle, so the count starts again
+  const long = { phase: 'longBreak', startedAt: T0, completed: 4 };
+  assert.deepStrictEqual(pomodoro.skipBreak(long, T0 + MIN),
+    { phase: 'work', startedAt: T0 + MIN, completed: 0 });
+});
+
+test('only a break can be skipped: work and off come back unchanged', () => {
+  const work = { phase: 'work', startedAt: T0, completed: 1 };
+  assert.deepStrictEqual(pomodoro.skipBreak(work, T0 + MIN), work);
+  assert.deepStrictEqual(pomodoro.skipBreak(null, T0),
+    { phase: 'off', startedAt: 0, completed: 0 });
+});

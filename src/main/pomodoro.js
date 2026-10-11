@@ -105,6 +105,18 @@ function stop() {
 }
 
 /**
+ * Cut a break short and start the next work block now. Only a break can be
+ * skipped: skipping work would hand out a Pomodoro nobody earned, so a work
+ * block (or nothing running) comes back unchanged.
+ */
+function skipBreak(state, now) {
+  const s = normalize(state);
+  if (s.phase !== 'break' && s.phase !== 'longBreak') return s;
+  // The long break closes the cycle, exactly as when it runs out on its own.
+  return { phase: 'work', startedAt: now, completed: s.phase === 'longBreak' ? 0 : s.completed };
+}
+
+/**
  * Advance at most one phase. Called from the poll loop, so it reports what it
  * did: `finishedPhase` is what main.js celebrates or announces.
  */
@@ -180,6 +192,7 @@ module.exports = {
   FALLBACK,
   start,
   stop,
+  skipBreak,
   tick,
   remaining,
   phaseDuration,

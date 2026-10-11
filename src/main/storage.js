@@ -41,6 +41,7 @@ const DEFAULTS = {
   drowsyAfter: 50,
   exhaustedAfter: 90,
   waterInterval: 45,
+  waterGoal: 8,               // glasses a day; 0 means no goal
 
   // persisted runtime state
   onboarded: false,
@@ -90,7 +91,8 @@ const NUMBER_LIMITS = {
   pomodoroLongEvery: [1, 12],
   drowsyAfter: [5, 600],
   exhaustedAfter: [5, 600],
-  waterInterval: [5, 600]
+  waterInterval: [5, 600],
+  waterGoal: [0, 20]
 };
 
 const CHOICES = {

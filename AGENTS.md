@@ -27,7 +27,7 @@ Skip `README.md` unless you need the user-facing behaviour or the "Extending Pip
 | `scripts/` | icon generation and the smoke test |
 | `build/` | electron-builder resources: `installer.nsh`, and the generated `build/icon.ico` and `build/icon.png` |
 | `test/` | `node --test` suites, one per module plus wiring, scope, docs, main |
-| `.github/` | CI (`npm test`; on macOS also smoke-tests the source and a built Pip.app), issue and PR templates |
+| `.github/` | CI (`npm test`; on macOS also smoke-tests the source and a built Pip.app), the release workflow that builds the installers and attaches them to a GitHub release, issue and PR templates |
 
 ## Commands
 

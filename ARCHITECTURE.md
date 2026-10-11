@@ -284,7 +284,7 @@ Every situation has **at least 6 variants**. Situations:
 `onboarding_drag` `onboarding_menu` `onboarding_flavor` `onboarding_tray`
 `onboarding_menubar` (said instead of `onboarding_tray` on a Mac)
 `good_morning` `welcome_back` `pet` `snack` `click` `startle` `annoyed`
-`water_due` `water_logged` `pomodoro_done` `break_start` `break_over`
+`water_due` `water_logged` `water_goal` `pomodoro_done` `break_start` `break_over`
 `drowsy` `exhausted` `late_night` `bored` `called` `dizzy` `low_mood`
 `high_mood` `quiet_on` `season_start` `battery_low` `on_battery`
 
@@ -331,7 +331,7 @@ Only these names exist. `src/preload.js` enforces the list.
 
 | Channel | Direction | Payload |
 |---|---|---|
-| `settings:get` | invoke | → `{ settings, today, history, pomodoroRunning, quiet, hidden }` — `history` is `history.summarize()`: `{ days, week, streak }`, see §10 |
+| `settings:get` | invoke | → `{ settings, today, history, pomodoroRunning, pomodoro, quiet, hidden }` — `history` is `history.summarize()`: `{ days, week, streak }`, see §10; `pomodoro` is the `pip:pomodoro` payload, from which the window counts down on its own |
 | `settings:set` | send | `{ patch }` — partial settings. Main keeps only the user-editable keys (`storage.USER_KEYS`) and clamps every value (`storage.cleanPatch`) |
 | `settings:action` | send | `{ action }` — see the action list below |
 | `settings:update` | main → window | same shape as `settings:get` |
@@ -347,7 +347,7 @@ Only these names exist. `src/preload.js` enforces the list.
 
 Shared by the tray menu, Pip's right-click menu and the settings window:
 
-`pomodoro-toggle` `water` `feed` `call` `quiet` `toggle-visible`
+`pomodoro-toggle` `pomodoro-skip` `water` `feed` `call` `quiet` `toggle-visible`
 `reset-position` `settings` `debug` `quit`
 
 ---
@@ -381,8 +381,8 @@ intervals, so system sleep can never skew a Pomodoro or a work streak.
 | break | idle ≥ 5 min, `suspend`, or `lock-screen` — resets continuous work |
 | drowsy | 50 min of continuous work (configurable) |
 | exhausted | 90 min (configurable) |
-| water | every 45 active minutes (configurable); daily count resets at local midnight |
-| pomodoro | 25 / 5, long break 15 after every 4 (all configurable) |
+| water | every 45 active minutes (configurable); daily count resets at local midnight. The glass that reaches `waterGoal` (8, 0 for none) is celebrated. While Pip is hidden, the reminder is also a notification |
+| pomodoro | 25 / 5, long break 15 after every 4 (all configurable). `pomodoro-skip` ends a break early and starts the next work block now; it never skips work |
 | sleeping | you have been away ≥ 5 min |
 | day roll | at local midnight `today` is filed into `history` (kept 70 days) and reset |
 | seasons | Valentine's (1–14 Feb) `bubblegum`, October `pumpkin`, December `candycane` |

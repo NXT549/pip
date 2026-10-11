@@ -75,7 +75,7 @@
       }
     },
     "dmg": {
-      "artifactName": "Pip-${version}-mac.${ext}"
+      "artifactName": "Pip-${version}-${arch}.${ext}"
     }
   }
 }

@@ -98,7 +98,7 @@ test('the settings and debug surfaces are handled in main', () => {
 test('every shared menu action has a handler', () => {
   // The tray menu, Pip's right-click menu and the settings window all funnel
   // through doAction, so a typo here is a silently dead menu item.
-  const actions = ['pomodoro-toggle', 'water', 'feed', 'call', 'quiet',
+  const actions = ['pomodoro-toggle', 'pomodoro-skip', 'water', 'feed', 'call', 'quiet',
     'toggle-visible', 'reset-position', 'settings', 'debug', 'quit'];
   for (const action of actions) {
     assert.ok(mainSrc.includes("case '" + action + "'"),
