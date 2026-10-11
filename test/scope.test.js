@@ -58,7 +58,7 @@ function loadShared(files) {
 }
 
 test('the overlay page still loads every module it relies on', () => {
-  for (const name of ['palettes.js', 'sprites.js', 'animations.js', 'physics.js',
+  for (const name of ['palettes.js', 'sprites.js', 'hats.js', 'animations.js', 'physics.js',
     'particles.js', 'bubbles.js']) {
     assert.ok(OVERLAY_MODULES.some((p) => p.endsWith('/' + name)),
       'overlay.html no longer loads ' + name);

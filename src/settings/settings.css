@@ -86,7 +86,8 @@ h2 {
 
 .season-row { margin-top: 10px; }
 
-.flavor {
+.flavor,
+.hat {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -99,24 +100,32 @@ h2 {
   transition: border-color 80ms ease;
 }
 
-.flavor:hover { border-color: var(--field-line); }
+/* Hats make Pip taller, so line the previews up by his feet. */
+.hat { justify-content: flex-end; }
 
-.flavor[aria-pressed="true"] {
+.flavor:hover,
+.hat:hover { border-color: var(--field-line); }
+
+.flavor[aria-pressed="true"],
+.hat[aria-pressed="true"] {
   border-color: var(--accent);
 }
 
-.flavor canvas {
+.flavor canvas,
+.hat canvas {
   image-rendering: pixelated;
   display: block;
 }
 
-.flavor span {
+.flavor span,
+.hat span {
   font-size: 11px;
   color: var(--ink-soft);
   text-transform: capitalize;
 }
 
-.flavor[aria-pressed="true"] span {
+.flavor[aria-pressed="true"] span,
+.hat[aria-pressed="true"] span {
   color: var(--ink);
   font-weight: 600;
 }

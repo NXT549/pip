@@ -15,6 +15,7 @@
 | seasonal flavours | `src/main/seasons.js` | `seasons.test.js`, `main.test.js` | §3, §10 |
 | past days, streak calendar | `src/main/history.js` | `history.test.js`, `main.test.js` | §8 settings, §10 |
 | colours / flavours | `src/renderer/palettes.js` | `palettes.test.js` | §3 |
+| hats | `src/renderer/hats.js` | `hats.test.js` | §3 |
 | frames (generated) | `tools/frame-specs.js` → `sprites.js` | `sprites.test.js` | §3 |
 | clips | `src/renderer/animations.js` | `sprites.test.js`, `wiring.test.js` | §5 |
 | gravity, walls, throws | `src/renderer/physics.js` | `physics.test.js` | — |
@@ -63,3 +64,8 @@ build settings live in the `mac` block of `package.json`. Describe it in §1.
 `B D L F H`, and add it to the §3 list. To hand it out for a season too, add a
 row to `SEASONS` in `seasons.js` (no overlaps; `seasons.test.js` checks) and to
 the §10 table.
+
+**New hat.** Add one entry to `HATS` in `hats.js`: rows drawn facing right,
+`O` for outline, lowercase keys in its `colors`. Add it to the §3 hat list.
+Settings and storage pick it up from `HAT_NAMES`; `hats.test.js` checks it
+sits on every pose without covering an eye.
