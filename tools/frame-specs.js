@@ -5,6 +5,10 @@
  * `npm run sprites` feeds every entry here through tools/gen-sprites.js and
  * writes the resulting literal frames into src/renderer/sprites.js.
  *
+ * Every number here is in Pip units: his original 32x32 grid. The generator
+ * draws each unit as a DETAIL x DETAIL block of finer pixels, so a pose
+ * written here keeps its size whatever the detail level.
+ *
  * A spec is:
  *   body   {cx, cy, w, h, dip, dipW}   jellybean silhouette (partial override)
  *   legs   {mode, lift:[farBack, farFront, nearBack, nearFront], width, spread,

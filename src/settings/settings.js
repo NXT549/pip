@@ -59,15 +59,17 @@
     const w = maxC - minC + 1;
     const h = maxR - minR + 1;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(w * PREVIEW_SCALE * dpr);
-    canvas.height = Math.round(h * PREVIEW_SCALE * dpr);
-    canvas.style.width = w * PREVIEW_SCALE + 'px';
-    canvas.style.height = h * PREVIEW_SCALE + 'px';
+    // PREVIEW_SCALE is DIPs per Pip unit, the same unit the overlay sizes him in
+    const unit = PREVIEW_SCALE / (Sprites.DETAIL || 1);
+    canvas.width = Math.round(w * unit * dpr);
+    canvas.height = Math.round(h * unit * dpr);
+    canvas.style.width = w * unit + 'px';
+    canvas.style.height = h * unit + 'px';
 
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const px = PREVIEW_SCALE * dpr;
+    const px = unit * dpr;
     for (let r = 0; r < h; r++) {
       for (let c = 0; c < w; c++) {
         const ch = rows[minR + r][minC + c];

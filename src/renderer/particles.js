@@ -6,7 +6,7 @@
  * heart happened to float under the cursor.
  *
  * Every kind is drawn as chunky filled rects on a grid rather than as curves.
- * Pip is 32x32 pixel art; a smooth vector heart next to him would read as a
+ * Pip is pixel art; a smooth vector heart next to him would read as a
  * different program's UI, so the shapes below are literal pixel patterns and
  * everything is snapped to whole blocks of `unit` DIPs.
  *

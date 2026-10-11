@@ -43,3 +43,8 @@
 
 13. **No `TODO`, `FIXME`, `HACK` or "not implemented" in source.** `wiring.test.js`
     fails on them. Finish the work, or leave it out.
+
+14. **Pip units are not sprite pixels.** Frames are 64x64, but Pip is sized
+    and placed in units of his old 32 grid (`Sprites.DETAIL` pixels each).
+    `settings.scale`, `FOOT_OFFSET`, frame-specs and every DIP offset are in
+    units; only code that indexes `Sprites.FRAMES` works in pixels.
