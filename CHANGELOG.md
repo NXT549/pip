@@ -23,6 +23,11 @@
 
 ### Fixed
 
+- **Pip runs on macOS 12 (Monterey) again.** The Mac app said it needed
+  macOS 13, because Electron 44 dropped Monterey. Pip now builds on
+  Electron 43, which still supports it. CI and the Release workflow
+  refuse a Mac build that needs anything newer than macOS 12, and a test
+  keeps Electron from being bumped past 43 by accident.
 - **The Mac download.** The Release workflow built an Apple-silicon-only
   `.dmg`, refused it, and so never attached one, leaving the README's Mac
   link pointing at a release page with no `.dmg`. It now builds a
