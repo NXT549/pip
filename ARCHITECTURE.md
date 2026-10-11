@@ -287,6 +287,7 @@ Every situation has **at least 6 variants**. Situations:
 `water_due` `water_logged` `water_goal` `pomodoro_done` `break_start` `break_over`
 `drowsy` `exhausted` `late_night` `bored` `called` `dizzy` `low_mood`
 `high_mood` `quiet_on` `season_start` `battery_low` `on_battery`
+`ricochet` (a throw that bounces off three screen edges)
 
 `mood` is 0–100; `hour` is the local hour 0–23. `last` is the previously shown
 line for that situation, which `pick` must not return again.
@@ -323,6 +324,7 @@ Only these names exist. `src/preload.js` enforces the list.
 | `pip:pet` | `{}` — cursor rested on Pip for ~1s |
 | `pip:startle` | `{}` — fast jerky cursor movement nearby |
 | `pip:climb` | `{ climbing: boolean }` |
+| `pip:bonk` | `{ side, speed, count }` — a thrown Pip ricocheted off a screen edge: `side` is `'left'`, `'right'` or `'top'`, `speed` the impact in DIP/s, `count` the edges hit since he was let go. A hard one keeps him dizzy; the third says a `ricochet` line |
 | `pip:battery` | `{ level: 0..1, charging: boolean }` — Electron cannot read this, so the renderer reports it |
 | `pip:context-menu` | `{ x, y }` |
 | `pip:error` | `{ message, stack }` |

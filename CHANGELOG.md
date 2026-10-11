@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Throwing Pip is bouncier.** A hard throw now ricochets him off the
+  sides and the top of the screen instead of stopping him dead, with a
+  puff of sparkles and a squash against whatever he hit. He spins as he
+  flies, faster the harder he was flung, and rights himself on landing.
+  Every impact leaves him wobbling like jelly for a moment. A hard knock
+  off an edge keeps him dizzy for the rest of the flight, a long tumble
+  leaves him seeing stars even after a soft landing, and bouncing him off
+  three edges in one throw gets a new `ricochet` line. A tumbling Pip can
+  still be caught mid-air. Works the same on Windows and Mac.
+
 - **A daily water goal.** A new setting, eight glasses unless you change
   it (0 turns it off). Settings shows today's glasses against it, and the
   glass that reaches it gets a dance, confetti and a new `water_goal` line
@@ -56,6 +66,10 @@
 
 ### Tests
 
+- Physics tests for wall and ceiling ricochets, spin, the landing wobble
+  (including a slow frame), and that ricochets never let Pip out of the
+  world. `main.test.js` scenarios for `pip:bonk` keeping him dizzy, the
+  `ricochet` line, and a bonk while he is held being ignored.
 - `main.test.js` covers the water goal, skipping a break, the tooltip's
   wording, an exhausted threshold below the drowsy one, and the hidden-Pip
   water notification. Its fake Electron now records notifications.

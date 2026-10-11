@@ -60,6 +60,8 @@
 
   /** Land harder than this (DIP/s) and Pip sees stars. */
   const STARS_SPEED = 700;
+  /** Tumble this many turns in one flight and he sees stars however he lands. */
+  const STARS_TURNS = 1.5;
   /** A fresh puff of z's this often while Pip sleeps. */
   const ZZZ_EVERY_MS = 2800;
   /**
@@ -134,6 +136,8 @@
   let lastClimbSent = false;
   let landedUntil = 0;
   let sway = 0;                    // dangle angle, eased toward drag speed
+  /** Edges Pip has ricocheted off since he was last let go. */
+  let bonks = 0;
 
   /**
    * Trotting-on-the-spot detector.
@@ -214,6 +218,11 @@
    * Geometry
    * ---------------------------------------------------------------- */
 
+  /** The point Pip tumbles about: the middle of his sprite box. */
+  function spinPivot(rect) {
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+
   /** Where Pip's sprite box sits on screen right now, in DIPs. */
   function spriteRect() {
     const sy = body.squash;
@@ -236,6 +245,17 @@
     const rows = Sprites.FRAMES[currentFrame];
     if (!rows) return false;
     const rect = spriteRect();
+    if (body.spin !== 0) {
+      // He is drawn turned, so turn the point back the other way to test it
+      // against the upright frame - a tumbling Pip can still be caught.
+      const c = spinPivot(rect);
+      const cos = Math.cos(-body.spin);
+      const sin = Math.sin(-body.spin);
+      const dx = x - c.x;
+      const dy = y - c.y;
+      x = c.x + dx * cos - dy * sin;
+      y = c.y + dx * sin + dy * cos;
+    }
     if (x < rect.left || x >= rect.left + rect.width) return false;
     if (y < rect.top || y >= rect.top + rect.height) return false;
 
@@ -254,7 +274,10 @@
       right: Math.max(half + 1, bounds.width - half),
       top: half,
       bottom: Math.max(half + 1, bounds.height),
-      height: SIZE * settings.scale
+      height: SIZE * settings.scale,
+      // A thrown Pip bounces off the top of the screen once his head reaches
+      // it, rather than sailing out of sight.
+      ceiling: Math.min(FOOT_OFFSET * settings.scale, Math.max(half + 1, bounds.height) - 1)
     };
   }
 
@@ -452,6 +475,13 @@
       ctx.rotate(sway);
       ctx.translate(-pivotX, -pivotY);
     }
+    // Thrown, he tumbles about his middle.
+    if (body.spin !== 0) {
+      const c = spinPivot(rect);
+      ctx.translate(c.x, c.y);
+      ctx.rotate(body.spin);
+      ctx.translate(-c.x, -c.y);
+    }
     if (body.facing === -1) {
       ctx.translate(rect.left + rect.width, rect.top);
       ctx.scale(-1, 1);
@@ -523,7 +553,7 @@
       Math.round(rect.left * 2), Math.round(rect.top * 2),
       Math.round(rect.width * 2), Math.round(rect.height * 2),
       body.facing, settings.flavor,
-      Math.round(sway * 60),
+      Math.round(sway * 60), Math.round(body.spin * 60),
       // particle positions change every tick, so the count alone is not
       // enough - repaint while anything is in flight
       particleList.length ? 'fx' + Math.round(lastTick) : '-',
@@ -622,6 +652,26 @@
       }
       if (events.speed > 420) Particles.spawn(particleList, 'sparkle', body.x, body.y, 2);
       landedUntil = now + 500;
+      if (events.speed <= STARS_SPEED && events.turns >= STARS_TURNS) {
+        // Spun round and round, then set down softly: still seeing stars.
+        Particles.spawn(particleList, 'star', body.x, body.y - settings.scale * 18, 3);
+      }
+      if (body.grounded) bonks = 0;
+    }
+    if (events.bonked) {
+      // A puff where he hit, and main decides how he feels about it.
+      bonks += 1;
+      const half = (SIZE * settings.scale) / 2;
+      const hitX = events.bonked === 'left' ? body.x - half
+        : events.bonked === 'right' ? body.x + half : body.x;
+      const hitY = events.bonked === 'top' ? body.y - FOOT_OFFSET * settings.scale
+        : body.y - half;
+      Particles.spawn(particleList, 'sparkle', hitX, hitY, events.bonkSpeed > 900 ? 4 : 2);
+      notify('pip:bonk', {
+        side: events.bonked,
+        speed: Math.round(events.bonkSpeed),
+        count: bonks
+      });
     }
 
     // Walking should look like walking even when the brain says idle, but a
@@ -751,7 +801,7 @@
       drag || overPip || body.climbing || !body.grounded ||
       dir !== 0 || Math.abs(body.vx) > 0.5 || gotoX !== null ||
       localClip !== null || particleList.length > 0 || bubble !== null ||
-      sway !== 0 || Math.abs(body.squash - 1) > 0.01;
+      sway !== 0 || Math.abs(body.squash - 1) > 0.01 || body.spin !== 0;
     if (active) return ACTIVE_MS;
     return Math.min(MAX_IDLE_MS, Math.max(ACTIVE_MS, msToNextFrame(now)));
   }
@@ -934,6 +984,7 @@
     };
     body.held = true;
     gotoX = null;
+    bonks = 0;
     wake();
   });
 
@@ -952,6 +1003,8 @@
     body.vx = v.vx;
     body.vy = v.vy;
     body.grounded = false;
+    // Only a real throw sets him tumbling; a click never moved him.
+    body.spinRate = wasDrag ? Physics.launchSpin(v.vx, v.vy) : 0;
     hoverSince = 0;
     petSent = false;
 

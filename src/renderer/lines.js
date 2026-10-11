@@ -267,6 +267,17 @@
       'That was quite a ride.'
     ],
 
+    ricochet: [
+      'Boing! Boing! BOING!',
+      'I am a pinball now. This is my life.',
+      'Three walls! Is that a high score?',
+      'Ricochet bean, reporting for duty.',
+      'Which wall was that? All of them?',
+      'Bonk, bonk, bonk. Wheee.',
+      { t: 'That was... actually quite fun.', mood: [0, 40] },
+      { t: 'AGAIN! Do it again!', mood: [70, 100] }
+    ],
+
     low_mood: [
       'I am a bit squished today. It passes.',
       'Just going to be quiet for a bit.',

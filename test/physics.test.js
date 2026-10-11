@@ -362,3 +362,146 @@ test('respawn drops Pip in at a chosen x, kept inside the walls', () => {
   Physics.respawn(body, bounds);
   assert.strictEqual(body.x, (bounds.left + bounds.right) / 2, 'no x means the middle');
 });
+
+/* ------------------------------------------------------------------ *
+ * Throwing him about: ricochets, spin and the landing wobble
+ * ------------------------------------------------------------------ */
+
+test('a throw into a side wall ricochets off it instead of stopping dead', () => {
+  const bounds = world();
+  const body = Physics.createBody(bounds.right - 5, 300);
+  body.vx = 1200;
+
+  const ev = Physics.step(body, 1 / 30, bounds);
+
+  assert.strictEqual(ev.bonked, 'right');
+  assert.ok(ev.bonkSpeed > 1000, 'with how hard he hit');
+  assert.strictEqual(body.x, bounds.right, 'and he stays inside the wall');
+  assert.ok(body.vx < 0, 'heading back the other way');
+  assert.ok(Math.abs(body.vx) < 1200 * Physics.WALL_BOUNCE + CLOSE, 'having lost speed');
+  assert.ok(body.squash > 1, 'squashed thin against the wall');
+
+  const left = Physics.createBody(bounds.left + 5, 300);
+  left.vx = -1200;
+  assert.strictEqual(Physics.step(left, 1 / 30, bounds).bonked, 'left');
+  assert.ok(left.vx > 0);
+});
+
+test('a slow drift into a wall just stops, without a bonk', () => {
+  const bounds = world();
+  const body = Physics.createBody(bounds.right - 2, 300);
+  body.vx = Physics.MIN_BONK - 40;
+  const ev = Physics.step(body, 1 / 30, bounds);
+  assert.strictEqual(ev.bonked, undefined);
+  assert.strictEqual(body.vx, 0);
+});
+
+test('a throw upward bounces off the ceiling line and falls back', () => {
+  const bounds = Object.assign(world(), { ceiling: 124 });
+  const body = Physics.createBody(400, 140);
+  body.vy = -1500;
+
+  const ev = Physics.step(body, 1 / 30, bounds);
+
+  assert.strictEqual(ev.bonked, 'top');
+  assert.strictEqual(body.y, 124);
+  assert.ok(body.vy > 0, 'now heading down');
+  assert.ok(body.squash < 1, 'squashed flat against it');
+});
+
+test('let go above the ceiling line, Pip is not yanked down to it', () => {
+  // He can be carried higher than the line; snapping him to it on release
+  // would read as a teleport.
+  const bounds = Object.assign(world(), { ceiling: 124 });
+  const body = Physics.createBody(400, 80);
+  body.vy = -600;
+  const ev = Physics.step(body, 1 / 30, bounds);
+  assert.strictEqual(ev.bonked, undefined);
+  assert.ok(body.y < 80, 'he carries on up');
+});
+
+test('ricochets never let Pip out of the world', () => {
+  const bounds = Object.assign(world(), { ceiling: 124 });
+  const body = Physics.createBody(400, 300);
+  body.vx = Physics.MAX_THROW;
+  body.vy = -Physics.MAX_THROW;
+  body.spinRate = Physics.launchSpin(body.vx, body.vy);
+  let bonks = 0;
+  for (let i = 0; i < 600; i++) {
+    const ev = Physics.step(body, 1 / 30, bounds);
+    assert.ok(!ev.respawned, 'respawned: ' + ev.reason);
+    if (ev.bonked) bonks++;
+    assert.ok(body.x >= bounds.left && body.x <= bounds.right);
+  }
+  assert.ok(bonks >= 2, 'a hard diagonal throw should hit more than one edge');
+  assert.strictEqual(body.grounded, true, 'and he comes to rest');
+});
+
+test('a throw sets Pip spinning the way he was flung, within limits', () => {
+  assert.strictEqual(Physics.launchSpin(100, 50), 0, 'a gentle toss does not spin');
+  assert.ok(Physics.launchSpin(900, 0) > 0, 'flung right spins clockwise');
+  assert.ok(Physics.launchSpin(-900, 0) < 0, 'flung left spins the other way');
+  assert.strictEqual(Physics.launchSpin(1e6, 0), Physics.MAX_SPIN, 'capped');
+  assert.strictEqual(Physics.launchSpin(NaN, 0), 0);
+});
+
+test('spinning, Pip turns in the air, reports it on landing and rights himself', () => {
+  const bounds = world();
+  const body = Physics.createBody(400, 200);
+  body.vx = 300;
+  body.spinRate = Physics.MAX_SPIN;
+
+  let landing = null;
+  for (let i = 0; i < 120 && !landing; i++) {
+    const ev = Physics.step(body, 1 / 30, bounds);
+    if (ev.landed) landing = ev;
+  }
+  assert.ok(landing, 'he never landed');
+  assert.ok(landing.turns > 0.5, 'the landing says how far he tumbled: ' + landing.turns);
+
+  for (let i = 0; i < 90; i++) Physics.step(body, 1 / 30, bounds);
+  assert.strictEqual(body.grounded, true);
+  assert.strictEqual(body.spin, 0, 'upright again on the floor');
+  assert.strictEqual(body.spinRate, 0);
+});
+
+test('being picked up stops the spin', () => {
+  const bounds = world();
+  const body = Physics.createBody(400, 200);
+  body.spin = 2;
+  body.spinRate = 10;
+  body.held = true;
+  Physics.step(body, 1 / 30, bounds);
+  assert.strictEqual(body.spin, 0);
+  assert.strictEqual(body.spinRate, 0);
+});
+
+test('a hard landing wobbles past round and back before it settles', () => {
+  const bounds = world();
+  const body = Physics.createBody(400, bounds.bottom);
+  body.grounded = true;
+  body.squash = Physics.SQUASH_MIN;   // as flat as a big landing makes him
+
+  let overshot = false;
+  for (let i = 0; i < 60; i++) {
+    Physics.step(body, 1 / 30, bounds, {});
+    if (body.squash > 1.01) overshot = true;
+    assert.ok(body.squash >= Physics.SQUASH_MIN && body.squash <= Physics.SQUASH_MAX);
+  }
+  assert.ok(overshot, 'a spring back to round should jiggle tall before settling');
+
+  for (let i = 0; i < 60; i++) Physics.step(body, 1 / 30, bounds, {});
+  assert.strictEqual(body.squash, 1, 'and it does settle, so the loop can idle');
+});
+
+test('the wobble stays sane on a slow frame', () => {
+  const bounds = world();
+  const body = Physics.createBody(400, bounds.bottom);
+  body.grounded = true;
+  body.squash = Physics.SQUASH_MIN;
+  for (let i = 0; i < 20; i++) {
+    Physics.step(body, 0.1, bounds, {});
+    assert.ok(isFinite(body.squash) && isFinite(body.squashV));
+  }
+  assert.ok(Math.abs(body.squash - 1) < 0.05);
+});

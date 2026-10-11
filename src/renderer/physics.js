@@ -26,6 +26,33 @@
   const SQUASH_MAX = 1.28;
 
   /**
+   * Pip's squash springs back to shape rather than easing, so every impact
+   * jiggles a few times before he settles - on the floor and mid-bounce
+   * alike. Underdamped on purpose: about three visible wobbles.
+   */
+  const WOBBLE_STIFFNESS = 320;   // 1/s^2
+  const WOBBLE_DAMPING = 11;      // 1/s
+
+  /** Fraction of sideways speed kept when Pip ricochets off a screen edge. */
+  const WALL_BOUNCE = 0.55;
+  /** Slower than this (DIP/s) he just stops against the wall, as before. */
+  const MIN_BONK = 260;
+  /** Fraction of speed kept off the ceiling - it is a soft ceiling. */
+  const CEILING_BOUNCE = 0.4;
+
+  /**
+   * Spin. A throw sets Pip tumbling as if he rolled off the pointer: faster
+   * sideways means faster spin, capped so he never becomes a blur. Gentle
+   * tosses do not spin at all.
+   */
+  const SPIN_RADIUS = 90;         // DIP - sideways speed / radius = rad/s
+  const MAX_SPIN = 4 * Math.PI;   // two turns a second
+  const MIN_SPIN_THROW = 450;     // DIP/s of throw before he starts to tumble
+  const SPIN_DRAG = 0.7;          // fraction of spin rate kept per second in the air
+  /** On the floor, how fast he rights himself (1/s). */
+  const UPRIGHT_RATE = 14;
+
+  /**
    * A fresh body.
    * @param {number} x centre x in DIPs
    * @param {number} y feet y in DIPs
@@ -41,6 +68,10 @@
       held: false,
       climbing: null,     // null | 'left' | 'right'
       squash: 1,          // <1 = flattened and wide, >1 = tall and thin
+      squashV: 0,         // rate of change of squash, for the landing wobble
+      spin: 0,            // radians, drawn about his middle; 0 = upright
+      spinRate: 0,        // rad/s while airborne
+      turned: 0,          // radians tumbled since he left the floor
       landedAt: 0         // timestamp of the last landing, for squash timing
     };
   }
@@ -90,7 +121,34 @@
     body.held = false;
     body.climbing = null;
     body.squash = 1;
+    body.squashV = 0;
+    body.spin = 0;
+    body.spinRate = 0;
+    body.turned = 0;
     return body;
+  }
+
+  /** Wrap an angle into (-PI, PI], so righting himself takes the short way. */
+  function wrapAngle(a) {
+    if (!isFinite(a)) return 0;
+    a = a % (2 * Math.PI);
+    if (a > Math.PI) a -= 2 * Math.PI;
+    if (a <= -Math.PI) a += 2 * Math.PI;
+    return a;
+  }
+
+  /**
+   * How fast a throw sets Pip spinning, in rad/s. Positive is clockwise on
+   * screen, which is the way a body rolls when it is flung to the right.
+   *
+   * @param {number} vx launch velocity, DIP/s
+   * @param {number} vy launch velocity, DIP/s
+   */
+  function launchSpin(vx, vy) {
+    if (!isFinite(vx) || !isFinite(vy)) return 0;
+    if (Math.hypot(vx, vy) < MIN_SPIN_THROW) return 0;
+    const rate = vx / SPIN_RADIUS;
+    return Math.max(-MAX_SPIN, Math.min(MAX_SPIN, rate));
   }
 
   /** Keep Pip inside the world no matter what happened this frame. */
@@ -126,6 +184,10 @@
     if (body.held) {
       // While held, the pointer owns the position; just relax the squash.
       body.squash += (1 - body.squash) * Math.min(1, dt * 8);
+      body.squashV = 0;
+      body.spin = 0;
+      body.spinRate = 0;
+      body.turned = 0;
       body.grounded = false;
       return events;
     }
@@ -150,8 +212,35 @@
     body.vy += GRAVITY * dt;
     if (body.vy > MAX_FALL) body.vy = MAX_FALL;
 
+    const prevY = body.y;
     body.x += body.vx * dt;
     body.y += body.vy * dt;
+
+    // Screen edges are springy in the air. A throw that reaches one comes
+    // back off it instead of stopping dead, so Pip can be ricocheted round
+    // the desktop. On the floor the wall still just stops him: a wander into
+    // it is the climb-or-turn logic's business, and a skid ends against it.
+    if (!wasGrounded) {
+      if (body.x <= bounds.left && body.vx < -MIN_BONK) {
+        bonk(body, events, 'left', -body.vx);
+        body.x = bounds.left;
+        body.vx = -body.vx * WALL_BOUNCE;
+      } else if (body.x >= bounds.right && body.vx > MIN_BONK) {
+        bonk(body, events, 'right', body.vx);
+        body.x = bounds.right;
+        body.vx = -body.vx * WALL_BOUNCE;
+      }
+    }
+    const ceiling = typeof bounds.ceiling === 'number' && isFinite(bounds.ceiling)
+      ? Math.max(bounds.ceiling, bounds.top - bounds.height)
+      : bounds.top - bounds.height;
+    // Only when he crosses it this step: let go above the line (he can be
+    // carried higher), he must not be yanked down to it.
+    if (body.y <= ceiling && prevY > ceiling && body.vy < 0) {
+      if (-body.vy > MIN_BONK) bonk(body, events, 'top', -body.vy);
+      body.y = ceiling;
+      body.vy = -body.vy * CEILING_BOUNCE;
+    }
 
     if (body.y >= bounds.bottom) {
       const impact = body.vy;
@@ -171,22 +260,40 @@
       if (!wasGrounded && impact > 40) {
         events.landed = true;
         events.speed = impact;
+        // How far he tumbled on the way, so a spinning throw can leave him
+        // dizzier than a plain one.
+        events.turns = Math.abs(body.turned) / (2 * Math.PI);
         // Flatten and widen on impact, proportional to how hard Pip hit.
         body.squash = Math.max(SQUASH_MIN, 1 - Math.min(0.28, impact / 9000));
+        body.squashV = 0;
+        // Touching the floor stops the tumble; a bounce rolls on more slowly.
+        body.spinRate = body.grounded ? 0 : body.spinRate * 0.5;
+        if (body.grounded) body.turned = 0;
       }
     } else {
       body.grounded = false;
-      // Stretch tall while moving fast vertically - jumping or dangling.
-      const stretch = 1 + Math.min(0.24, Math.abs(body.vy) / 9000);
-      body.squash += (stretch - body.squash) * Math.min(1, dt * 6);
     }
+
+    // Stretch tall while moving fast vertically - jumping or dangling - and
+    // spring back to round on the floor.
+    const shape = body.grounded ? 1 : 1 + Math.min(0.24, Math.abs(body.vy) / 9000);
+    wobble(body, shape, dt);
 
     if (body.grounded) {
       if (typeof opts.walkSpeed !== 'number') {
         body.vx *= Math.pow(FRICTION, dt * 60);
         if (Math.abs(body.vx) < 2) body.vx = 0;
       }
-      body.squash += (1 - body.squash) * Math.min(1, dt * 7);
+      body.spinRate = 0;
+      body.turned = 0;
+      body.spin = wrapAngle(body.spin);
+      body.spin += (0 - body.spin) * Math.min(1, dt * UPRIGHT_RATE);
+      if (Math.abs(body.spin) < 0.01) body.spin = 0;
+    } else if (body.spinRate !== 0) {
+      const turn = body.spinRate * dt;
+      body.spin = wrapAngle(body.spin + turn);
+      body.turned += turn;
+      body.spinRate *= Math.pow(SPIN_DRAG, dt);
     }
 
     if (body.squash < SQUASH_MIN) body.squash = SQUASH_MIN;
@@ -205,6 +312,40 @@
     }
 
     return events;
+  }
+
+  /**
+   * Spring the squash toward `shape`. Sub-stepped so a slow frame (dt is
+   * capped at 0.1s) cannot make the spring blow up, and snapped once it is
+   * imperceptible so the render loop can go back to idling.
+   */
+  function wobble(body, shape, dt) {
+    const n = Math.max(1, Math.ceil(dt / 0.01));
+    const h = dt / n;
+    for (let i = 0; i < n; i++) {
+      const acc = -WOBBLE_STIFFNESS * (body.squash - shape) - WOBBLE_DAMPING * body.squashV;
+      body.squashV += acc * h;
+      body.squash += body.squashV * h;
+    }
+    if (Math.abs(body.squash - shape) < 0.004 && Math.abs(body.squashV) < 0.05) {
+      body.squash = shape;
+      body.squashV = 0;
+    }
+  }
+
+  /**
+   * Pip hit a screen edge hard enough to ricochet. Squashes him against it
+   * and knocks his spin about, and reports it for stars and a reaction.
+   */
+  function bonk(body, events, side, speed) {
+    events.bonked = side;
+    events.bonkSpeed = speed;
+    const amount = Math.min(0.28, speed / 7000);
+    // A side wall flattens him tall and thin; the ceiling, short and wide.
+    body.squash = side === 'top' ? Math.max(SQUASH_MIN, 1 - amount) : Math.min(SQUASH_MAX, 1 + amount);
+    body.squashV = 0;
+    // Glancing off a wall reverses the tumble, like a ball with English on it.
+    body.spinRate = -body.spinRate * 0.7;
   }
 
   /**
@@ -287,8 +428,9 @@
 
   const Physics = {
     GRAVITY, MAX_FALL, BOUNCE, MIN_BOUNCE, FRICTION, MAX_THROW,
-    SQUASH_MIN, SQUASH_MAX,
-    createBody, isValidPosition, invalidReason, respawn, clamp, step, throwVelocity, resolveWalk
+    SQUASH_MIN, SQUASH_MAX, WALL_BOUNCE, MIN_BONK, MAX_SPIN, MIN_SPIN_THROW,
+    createBody, isValidPosition, invalidReason, respawn, clamp, step, throwVelocity, resolveWalk,
+    launchSpin, wrapAngle
   };
 
   if (typeof window !== 'undefined') {
