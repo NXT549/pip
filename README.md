@@ -89,7 +89,7 @@ his day.
 | Click him | A happy reaction or a passing remark |
 | Double-click him | Eats a snack |
 | Click him five times fast | Puffs up and scoots off in a huff |
-| Drag him | Dangles with all four legs paddling. Set him down gently and he carries on; throw him, or drop him from high up, and he tumbles, sees stars and shakes off the dizziness |
+| Drag him | Dangles with all four legs paddling. Set him down gently and he carries on; throw him, or drop him from high up, and he tumbles, sees stars and shakes off the dizziness. A hard throw sets him spinning, ricochets him off the screen edges and the top of the screen, and he wobbles like jelly when he lands. Bounce him off three edges in one throw and he has something to say about it |
 | Drag him onto another monitor | He moves over and drops in under the pointer |
 | Right-click him (Control-click on a Mac) | The full menu |
 | Move the mouse sharply near him | Startles him |

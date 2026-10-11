@@ -676,3 +676,34 @@ test('a visible Pip does not also send a notification for water', async (t) => {
   assert.ok(!h.notifications.includes('Water break'));
   h.assertHealthy();
 });
+
+test('a throw that ricochets round the screen stays dizzy and earns a line', async (t) => {
+  const h = await boot(t);
+  h.fire('pip:grabbed', {});
+  h.fire('pip:dropped', { x: 400, y: 300, speed: 2400, height: 372 });
+  // Long enough that the dizzy from the drop alone would be over.
+  h.tick(2000);
+  h.fire('pip:bonk', { side: 'right', speed: 1300, count: 1 });
+  h.tick(1500);
+  assert.strictEqual(h.lastState().clip, 'dizzy', 'a hard knock off a wall should keep him dizzy');
+
+  const before = h.said().length;
+  h.fire('pip:bonk', { side: 'top', speed: 900, count: 2 });
+  h.fire('pip:bonk', { side: 'left', speed: 700, count: 3 });
+  h.fire('pip:bonk', { side: 'right', speed: 500, count: 4 });
+  const lines = h.said().slice(before);
+  assert.strictEqual(lines.length, 1, 'the third edge says one ricochet line, and only the third');
+  assert.ok(Lines.variants('ricochet').includes(lines[0]));
+  h.assertHealthy();
+});
+
+test('a bonk while Pip is held is ignored', async (t) => {
+  const h = await boot(t);
+  h.fire('pip:grabbed', {});
+  const before = h.said().length;
+  h.fire('pip:bonk', { side: 'left', speed: 2000, count: 3 });
+  h.tick(200);
+  assert.strictEqual(h.said().length, before);
+  assert.notStrictEqual(h.lastState().clip, 'dizzy');
+  h.assertHealthy();
+});

@@ -116,6 +116,8 @@ function runApp(store) {
   /** Let go faster than this (DIP/s), or from higher (DIP), and it was a throw. */
   const ROUGH_SPEED = 700;
   const ROUGH_HEIGHT = 240;
+  /** Ricochet off this many screen edges in one throw and Pip remarks on it. */
+  const RICOCHET_BONKS = 3;
   const CELEBRATE_MS = 6000;
   /** Idle behaviours are picked on this cadence, scaled by activity level. */
   const BEHAVIOR_MIN_MS = 20000;
@@ -1364,6 +1366,17 @@ function runApp(store) {
     ipcMain.on('pip:startle', () => {
       react('surprise');
       say('startle');
+    });
+
+    ipcMain.on('pip:bonk', (_e, payload) => {
+      const p = payload || {};
+      if (world.held) return;
+      // A hard knock off an edge keeps him dizzy for the rest of the flight,
+      // however long the ricochets carry on.
+      if ((Number(p.speed) || 0) > ROUGH_SPEED) react('dizzy', { ms: DIZZY_MS });
+      // Said once per throw, on the shot that earns it. It takes a deliberate
+      // flick to get there, so it skips the chatter cooldown.
+      if (Number(p.count) === RICOCHET_BONKS) say('ricochet', true);
     });
 
     ipcMain.on('pip:climb', (_e, payload) => {
