@@ -64,6 +64,7 @@ a second launch on Windows (`second-instance`).
 | `src/main/history.js` | past days, and the streak calendar built from them |
 | `src/main/logger.js` | rotating file log |
 | `src/renderer/palettes.js` | the palette and the flavours |
+| `src/renderer/hats.js` | the hats, and laying one over any frame |
 | `src/renderer/sprites.js` | every frame, as literal data (generated) |
 | `src/renderer/animations.js` | clips |
 | `src/renderer/physics.js` | gravity, landing, clamping, throwing |
@@ -113,6 +114,27 @@ Palettes.resolve(flavorName) -> { O:'#rrggbb', B:'#rrggbb', ... }  // 11 keys
 Palettes.isValidKey(ch) -> boolean
 Palettes.FLAVOR_NAMES, Palettes.BODY_KEYS, Palettes.STRUCTURAL_KEYS,
 Palettes.DEFAULT_FLAVOR, Palettes.TRANSPARENT
+```
+
+### Hats — `hats.js`
+
+A hat is a small grid like a frame, facing right, that uses `.`, the shared
+outline `O`, and lowercase keys for colours of its own. Lowercase never
+collides with a palette key, so hats sit outside the 12-entry cap and look the
+same in every flavour. Hats, in display order: `none` (default), `party`,
+`tophat`, `crown`, `beanie`, `flower`.
+
+Hats are not baked into `sprites.js`. `dress` lays one over a frame at runtime
+(drawn for the 32-pixel grid, scaled up whole on a finer one):
+the hat's bottom row replaces the top outline of the body, centred a little
+towards the face. The sideways `climb_*` poses wear it sideways, and a `_cap`
+frame keeps its nightcap instead. The renderer pre-renders and hit-tests the
+dressed frames, so the hat is part of Pip.
+
+```js
+Hats.dress(rows, hatName, frameName) -> rows   // a new array; never mutates
+Hats.colors(hatName) -> { p:'#rrggbb', ... }   // merge over Palettes.resolve()
+Hats.HAT_NAMES, Hats.DEFAULT_HAT
 ```
 
 ### Frames
@@ -301,7 +323,7 @@ Only these names exist. `src/preload.js` enforces the list.
 
 | Channel | Payload |
 |---|---|
-| `pip:settings` | `{ flavor, scale, activityLevel, quiet, nightcap, dev }` |
+| `pip:settings` | `{ flavor, hat, scale, activityLevel, quiet, nightcap, dev }` |
 | `pip:bounds` | `{ left, top, right, bottom, width, height }` — overlay DIPs |
 | `pip:state` | `{ state, clip, walkDir, walkSpeed, seq }` — `seq` is non-zero for a reaction or behaviour and changes whenever a new one starts, so the renderer replays a repeated clip from its first frame |
 | `pip:cursor` | `{ x, y, inside }` — overlay-relative DIPs |
@@ -433,4 +455,4 @@ flavour, size or activity level falls back to its default.
 - work in DIPs everywhere; size the canvas by `devicePixelRatio` and set
   `imageSmoothingEnabled = false` so pixels stay crisp at 100 %–200 % scaling
 - every frame is pre-rendered to an offscreen canvas at startup for the
-  current flavour and scale, and re-rendered when either changes
+  current flavour, hat and scale, and re-rendered when any of them changes

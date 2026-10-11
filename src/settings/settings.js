@@ -12,8 +12,9 @@
   const api = window.pipSettings;
   const Palettes = window.Pip && window.Pip.Palettes;
   const Sprites = window.Pip && window.Pip.Sprites;
+  const Hats = window.Pip && window.Pip.Hats;
 
-  /** The frame used for the little flavour previews. */
+  /** The frame used for the little flavour and hat previews. */
   const PREVIEW_FRAME = 'idle_0';
   const PREVIEW_SCALE = 2;
 
@@ -26,6 +27,8 @@
   const TOGGLE_FIELDS = ['notifications', 'launchAtLogin', 'compatibilityMode', 'seasonal'];
 
   let current = null;
+  /** The flavour the hat previews were last drawn in. */
+  let hatsDrawnIn = '';
 
   /** The running block as main last described it, and when that was. */
   let block = null;
@@ -33,14 +36,18 @@
   let countdownTimer = null;
 
   /* ---------------------------------------------------------------- *
-   * Flavour previews
+   * Flavour and hat previews
    * ---------------------------------------------------------------- */
 
-  function drawPreview(canvas, flavor) {
+  function drawPreview(canvas, flavor, hat) {
     if (!Palettes || !Sprites) return;
-    const rows = Sprites.FRAMES[PREVIEW_FRAME] || Sprites.FRAMES[Sprites.FRAME_NAMES[0]];
+    let rows = Sprites.FRAMES[PREVIEW_FRAME] || Sprites.FRAMES[Sprites.FRAME_NAMES[0]];
     if (!rows) return;
     const palette = Palettes.resolve(flavor);
+    if (Hats && hat) {
+      rows = Hats.dress(rows, hat, PREVIEW_FRAME);
+      Object.assign(palette, Hats.colors(hat));
+    }
     const N = Sprites.FRAME_SIZE;
 
     // Crop to Pip so the preview is not mostly empty space.
@@ -110,6 +117,48 @@
   function markFlavor(flavor) {
     for (const el of document.querySelectorAll('.flavor')) {
       el.setAttribute('aria-pressed', el.dataset.flavor === flavor ? 'true' : 'false');
+    }
+  }
+
+  /** One button per hat, each showing Pip in his current flavour wearing it. */
+  function buildHats() {
+    const host = document.getElementById('hats');
+    if (!host || !Hats) return;
+    host.textContent = '';
+    for (const name of Hats.HAT_NAMES) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'hat';
+      button.dataset.hat = name;
+      button.setAttribute('aria-pressed', 'false');
+
+      const canvas = document.createElement('canvas');
+      const label = document.createElement('span');
+      label.textContent = name === 'tophat' ? 'top hat' : name;
+
+      button.appendChild(canvas);
+      button.appendChild(label);
+      host.appendChild(button);
+
+      button.addEventListener('click', () => {
+        api.set({ hat: name });
+        markHat(name);
+      });
+    }
+  }
+
+  /** Redraw the hat previews in Pip's flavour, only when that flavour changes. */
+  function drawHats(flavor) {
+    if (flavor === hatsDrawnIn) return;
+    hatsDrawnIn = flavor;
+    for (const el of document.querySelectorAll('.hat')) {
+      drawPreview(el.querySelector('canvas'), flavor, el.dataset.hat);
+    }
+  }
+
+  function markHat(hat) {
+    for (const el of document.querySelectorAll('.hat')) {
+      el.setAttribute('aria-pressed', el.dataset.hat === hat ? 'true' : 'false');
     }
   }
 
@@ -187,6 +236,8 @@
       if (el) el.checked = !!s[key];
     }
     markFlavor(s.flavor);
+    drawHats(s.flavor);
+    markHat(s.hat);
     renderSeason(s);
 
     document.getElementById('statPomodoros').textContent = today.pomodoros || 0;
@@ -320,6 +371,7 @@
    * ---------------------------------------------------------------- */
 
   buildFlavors();
+  buildHats();
   bind();
   api.onUpdate(render);
   api.get().then(render).catch(() => { /* main will push an update shortly */ });

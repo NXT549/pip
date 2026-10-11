@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const Palettes = require('../renderer/palettes.js');
+const Hats = require('../renderer/hats.js');
 const History = require('./history.js');
 
 /** Everything Pip remembers, and what it falls back to. */
@@ -24,6 +25,7 @@ const DEFAULTS = {
 
   // appearance
   flavor: 'cherry',
+  hat: 'none',                // see src/renderer/hats.js
   petSize: 'medium',          // small | medium | large  -> scale 3 | 4 | 5
   activityLevel: 'normal',    // calm | normal | hyper
 
@@ -97,6 +99,7 @@ const NUMBER_LIMITS = {
 
 const CHOICES = {
   flavor: Palettes.FLAVOR_NAMES,
+  hat: Hats.HAT_NAMES,
   petSize: ['small', 'medium', 'large'],
   activityLevel: ['calm', 'normal', 'hyper']
 };

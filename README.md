@@ -103,6 +103,10 @@ February, pumpkin all October and candy cane all December. He changes back to
 your flavour afterwards. Pick any flavour mid-season and he keeps it, or turn
 **Seasonal flavors** off in Settings.
 
+He can wear a **little hat**, too: a party hat, a top hat, a crown, a beanie
+or a flower. Pick one under **Hat** in Settings and he keeps it on whatever he
+is doing, except at bedtime, when his nightcap takes over.
+
 Settings also keeps a **four-week calendar**: one square per day, lit when you
 finished a Pomodoro or logged a glass of water and brighter the more Pomodoros
 you did, with this week's totals and your current day streak. Hover a square
@@ -301,7 +305,7 @@ a plain script that attaches to `window.Pip` *and* exports itself under
 src/main.js        lifecycle, windows, tray, polling, power events, IPC
 src/preload.js     the only bridge; an explicit channel allow-list
 src/main/          brain, pomodoro, reminders, mood, clicks, storage, logger
-src/renderer/      palettes, sprites, animations, physics, particles,
+src/renderer/      palettes, sprites, hats, animations, physics, particles,
                    bubbles, lines, renderer
 src/settings/      the settings window
 src/debug/         the dev-mode debug panel
@@ -390,6 +394,22 @@ the settings picker with a live preview automatically. To hand it out for a
 season as well, add a row to `SEASONS` in `src/main/seasons.js`. Only the body keys
 (`B D L F H`) may be overridden — the outline, eyes, blush and mouth are shared
 so Pip stays recognisably Pip.
+
+#### Add a hat
+
+`src/renderer/hats.js`, the `HATS` object. A hat is a small grid drawn facing
+right, with `O` for the outline and lowercase keys for its own colours:
+
+```js
+crown: {
+  rows: ['.O..O..O.', 'OyOOyOOyO', 'OyyyyyyyO', 'OyjyyyjyO', 'OzzzzzzzO'],
+  colors: { y: '#ffd23f', z: '#e0a91c', j: '#4ad0e0' }
+}
+```
+
+The bottom row sits on the top of Pip's head in every pose, so there are no
+frames to redraw. It shows up in the settings picker on its own;
+`test/hats.test.js` checks it lands on his head and never covers his eyes.
 
 ### Three ways to grow Pip
 

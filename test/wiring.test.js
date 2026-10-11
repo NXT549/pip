@@ -115,7 +115,7 @@ test('every shared menu action has a handler', () => {
 
 test('the overlay loads every renderer module it uses', () => {
   const html = read('src/renderer/overlay.html');
-  for (const file of ['palettes.js', 'sprites.js', 'animations.js', 'physics.js',
+  for (const file of ['palettes.js', 'sprites.js', 'hats.js', 'animations.js', 'physics.js',
     'particles.js', 'bubbles.js', 'renderer.js']) {
     assert.ok(html.includes('src="' + file + '"'), 'overlay.html does not load ' + file);
   }
@@ -129,7 +129,7 @@ test('no module is left with a TODO or a stub', () => {
     'src/main/seasons.js', 'src/main/history.js',
     'src/renderer/renderer.js', 'src/renderer/physics.js', 'src/renderer/particles.js',
     'src/renderer/bubbles.js', 'src/renderer/lines.js', 'src/renderer/animations.js',
-    'src/renderer/palettes.js',
+    'src/renderer/palettes.js', 'src/renderer/hats.js',
     'src/settings/settings.js', 'src/debug/debug.js'
   ];
   for (const file of files) {

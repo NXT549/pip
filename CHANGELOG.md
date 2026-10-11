@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Little hats.** Pip can wear a party hat, a top hat, a crown, a beanie
+  or a flower. Settings has a new **Hat** picker that previews each one on
+  Pip in his current flavour. The hat stays on in every pose, turns
+  sideways when he climbs, and counts as part of him when you click or
+  drag. At bedtime his nightcap takes its place. `test/hats.test.js`
+  checks every hat sits on every pose without covering his eyes, and the
+  smoke test now paints every hat.
 - **A daily water goal.** A new setting, eight glasses unless you change
   it (0 turns it off). Settings shows today's glasses against it, and the
   glass that reaches it gets a dance, confetti and a new `water_goal` line

@@ -4,7 +4,7 @@
  * The main process decides *what* Pip is doing; this file decides what that
  * looks like. It owns:
  *   - pre-rendering every sprite frame to an offscreen canvas at the current
- *     flavour and scale (redone when either changes)
+ *     flavour, hat and scale (redone when any of them changes)
  *   - the animation clock
  *   - running physics.js, climbing the screen edges, and drawing the result
  *   - the effects layer: particles, one speech bubble, the Pomodoro ring
@@ -20,6 +20,7 @@
   const bridge = window.pipBridge;
   const Palettes = P.Palettes;
   const Sprites = P.Sprites;
+  const Hats = P.Hats;
   const Animations = P.Animations;
   const Physics = P.Physics;
   const Particles = P.Particles;
@@ -77,12 +78,14 @@
    * State
    * ---------------------------------------------------------------- */
 
-  let settings = { flavor: 'cherry', scale: 4, activityLevel: 'normal', quiet: false };
+  let settings = { flavor: 'cherry', hat: 'none', scale: 4, activityLevel: 'normal', quiet: false };
   let bounds = { left: 0, right: 100, top: 0, bottom: 100, width: 100, height: 100 };
   let dpr = window.devicePixelRatio || 1;
 
-  /** frameName -> offscreen canvas, rebuilt on flavour/scale change */
+  /** frameName -> offscreen canvas, rebuilt on flavour/hat/scale change */
   let frameCache = Object.create(null);
+  /** frameName -> the rows actually drawn, hat included, for hit testing */
+  let frameRows = Object.create(null);
 
   let body = Physics.createBody(120, 100);
   let clip = 'idle';
@@ -164,12 +167,14 @@
    * animation loop only ever does a single drawImage per frame.
    */
   function prerender() {
-    const palette = Palettes.resolve(settings.flavor);
+    const palette = Object.assign(Palettes.resolve(settings.flavor), Hats.colors(settings.hat));
     const px = settings.scale * dpr;      // device pixels per sprite pixel
     const cache = Object.create(null);
+    const dressed = Object.create(null);
 
     for (const name of Sprites.FRAME_NAMES) {
-      const rows = Sprites.FRAMES[name];
+      const rows = Hats.dress(Sprites.FRAMES[name], settings.hat, name);
+      dressed[name] = rows;
       const c = document.createElement('canvas');
       c.width = Math.max(1, Math.round(SIZE * px));
       c.height = Math.max(1, Math.round(SIZE * px));
@@ -194,6 +199,7 @@
       cache[name] = c;
     }
     frameCache = cache;
+    frameRows = dressed;
     lastDrawKey = '';
   }
 
@@ -230,10 +236,11 @@
 
   /**
    * Is (x, y) - overlay DIPs - on an opaque pixel of Pip's current frame?
-   * Tests the sprite data directly, which is exact and costs nothing.
+   * Tests the sprite data directly, which is exact and costs nothing. The
+   * hat counts: clicking it is clicking Pip, not the desktop behind him.
    */
   function hitTest(x, y) {
-    const rows = Sprites.FRAMES[currentFrame];
+    const rows = frameRows[currentFrame] || Sprites.FRAMES[currentFrame];
     if (!rows) return false;
     const rect = spriteRect();
     if (x < rect.left || x >= rect.left + rect.width) return false;
@@ -999,9 +1006,10 @@
 
   bridge.on('pip:settings', (s) => {
     const flavourChanged = s.flavor !== settings.flavor;
+    const hatChanged = 'hat' in s && s.hat !== settings.hat;
     const scaleChanged = s.scale !== settings.scale;
     settings = Object.assign({}, settings, s);
-    if (flavourChanged || scaleChanged || !Object.keys(frameCache).length) prerender();
+    if (flavourChanged || hatChanged || scaleChanged || !Object.keys(frameCache).length) prerender();
     wake();
   });
 
@@ -1169,9 +1177,12 @@
     setFlavor: (f) => { settings.flavor = f; prerender(); },
     playAll: function () {
       const errors = [];
-      for (const flavor of Palettes.FLAVOR_NAMES) {
+      const hatBefore = settings.hat;
+      Palettes.FLAVOR_NAMES.forEach((flavor, i) => {
         try {
           settings.flavor = flavor;
+          // Cycle the hats too, so every one is painted over every frame.
+          settings.hat = Hats.HAT_NAMES[i % Hats.HAT_NAMES.length];
           prerender();
           for (const name of Animations.CLIP_NAMES) {
             const c = Animations.CLIPS[name];
@@ -1217,8 +1228,9 @@
         } catch (err) {
           errors.push(flavor + ': ' + (err && err.message));
         }
-      }
+      });
       settings.flavor = 'cherry';
+      settings.hat = hatBefore;
       prerender();
       currentFrame = Sprites.FRAME_NAMES[0];
 

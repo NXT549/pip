@@ -237,6 +237,7 @@ function runApp(store) {
     world.nightcap = isNightcapHour();
     send('pip:settings', {
       flavor: store.get('flavor'),
+      hat: store.get('hat'),
       scale: scale(),
       activityLevel: store.get('activityLevel'),
       quiet: now() < store.get('quietUntil'),

@@ -11,7 +11,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 /** main -> renderer channels the overlay may listen on. */
 const INBOUND = [
-  'pip:settings',   // {flavor, scale, activityLevel, quiet, dev}
+  'pip:settings',   // {flavor, hat, scale, activityLevel, quiet, nightcap, dev}
   'pip:bounds',     // {left, right, top, bottom, width, height}
   'pip:state',      // {state, clip, facing, walkDir, walkSpeed}
   'pip:cursor',     // {x, y, inside}
