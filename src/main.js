@@ -190,31 +190,48 @@ function runApp(store) {
   }
 
   /**
-   * The display Pip lives on: the one he is on now, else the one he was on
-   * when Pip last ran, else the primary. The saved one is matched by id and
-   * then by its bounds, because Windows can renumber displays across a reboot
-   * or a dock, and a monitor still in the same place is still "his".
+   * The display Pip lives on: the one he was left on, if it is plugged in,
+   * else the one he is on now, else the primary. The saved one is matched by
+   * id and bounds together, then by bounds alone, then by id, because Windows
+   * can renumber displays across a reboot or a dock, and a monitor still in
+   * the same place is still "his". Saved first, so plugging his monitor back
+   * in brings him home.
    */
   function targetDisplay() {
     const all = screen.getAllDisplays();
+    const saved = savedDisplay(all);
+    if (saved) return saved;
     if (currentDisplayId !== null) {
       const found = all.find((d) => d.id === currentDisplayId);
       if (found) return found;
     }
-    const saved = store.get('display');
-    if (saved && saved.width > 0) {
-      const sameId = all.find((d) => d.id === saved.id);
-      if (sameId) return sameId;
-      const samePlace = all.find((d) => d.bounds.x === saved.x && d.bounds.y === saved.y &&
-        d.bounds.width === saved.width && d.bounds.height === saved.height);
-      if (samePlace) return samePlace;
-    }
     return screen.getPrimaryDisplay();
   }
 
-  /** Note which display Pip is on, on disk too, so a restart keeps him there. */
-  function rememberDisplay(display) {
+  /** The display in `all` that Pip was left on, or null when it is not plugged in. */
+  function savedDisplay(all) {
+    const saved = store.get('display');
+    if (!saved || !(saved.width > 0)) return null;
+    const samePlace = (d) => d.bounds.x === saved.x && d.bounds.y === saved.y &&
+      d.bounds.width === saved.width && d.bounds.height === saved.height;
+    return all.find((d) => d.id === saved.id && samePlace(d)) ||
+      all.find(samePlace) ||
+      all.find((d) => d.id === saved.id) ||
+      null;
+  }
+
+  /**
+   * Note which display Pip is on. It is written to disk only when it is his
+   * own: one he was put on, or the saved one found again (its id or size may
+   * have changed). A display he only fell back to, because his was unplugged,
+   * is not saved, so he goes home when it comes back.
+   */
+  function rememberDisplay(display, chosen) {
     currentDisplayId = display.id;
+    if (!chosen) {
+      const home = savedDisplay(screen.getAllDisplays());
+      if (!home || home.id !== display.id) return;
+    }
     const b = display.bounds;
     const saved = store.get('display');
     if (saved && saved.id === display.id && saved.x === b.x && saved.y === b.y &&
@@ -246,9 +263,9 @@ function runApp(store) {
    * Fit the overlay to the work area of the display Pip is on. The work area
    * already excludes the taskbar wherever it lives, including when it hides.
    */
-  function fitToDisplay(display) {
+  function fitToDisplay(display, chosen) {
     if (!overlay || overlay.isDestroyed()) return;
-    rememberDisplay(display);
+    rememberDisplay(display, chosen);
     placeOverlay(display.workArea);
     overlay.setAlwaysOnTop(true, 'floating');
     sendBounds();
@@ -1337,7 +1354,7 @@ function runApp(store) {
         const point = screen.getCursorScreenPoint();
         const display = screen.getDisplayNearestPoint(point);
         if (display.id !== currentDisplayId) {
-          fitToDisplay(display);
+          fitToDisplay(display, true);
           send('pip:reset', { x: point.x - display.workArea.x });
         }
       } catch (err) {

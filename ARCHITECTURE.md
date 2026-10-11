@@ -52,7 +52,10 @@ is there.
 
 **Displays**: the overlay covers the work area of one display. Main remembers
 it in `display: { id, x, y, width, height }` and reopens there, matching by id
-and then by bounds (Windows renumbers displays), else the primary. Every
+and bounds, then bounds, then id (Windows renumbers displays), else the
+primary. Only a display he is dropped on, or the saved one found again, is
+saved: falling back while his is unplugged keeps it, and he goes back to it
+when it returns. Every
 `setBounds` on the overlay is checked and repeated once if it landed the wrong
 size, which Windows does when moving between displays with different scale
 factors.

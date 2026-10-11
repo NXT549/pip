@@ -7,7 +7,8 @@
 - **Pip remembers his monitor.** On a setup with more than one display he
   reopens on the one he was last on, rather than always on the primary.
   He finds it again even when Windows renumbers displays after a reboot or
-  a dock, and falls back to the primary when it is unplugged.
+  a dock, and falls back to the primary when it is unplugged, going back
+  to it when it is plugged in again.
 - **A "naps after" setting** for how long you are away before Pip curls up:
   5 minutes as before, up to 120. Raise it if he dozes off while you watch
   videos. Breaks still count from five minutes away.

@@ -196,6 +196,7 @@ async function boot(t, opts) {
   };
   // app.on and powerMonitor.on are what main.js registers with.
   h.appEvents = electron.app;
+  h.screen = electron.screen;
 
   const silentLogger = {
     init() {},
@@ -732,7 +733,30 @@ test('a monitor Windows has renumbered is still found by where it is', async (t)
 test('with his monitor unplugged, Pip opens on the primary display', async (t) => {
   const h = await boot(t, { displays: [LAPTOP], data: { display: SAVED_MONITOR } });
   assert.deepStrictEqual(h.overlay.getBounds(), LAPTOP.workArea);
-  assert.strictEqual(h.saved().display.id, 1);
+  assert.deepStrictEqual(h.saved().display, SAVED_MONITOR,
+    'falling back to the primary forgot the monitor he was left on');
+  h.assertHealthy();
+});
+
+test('undocked and docked again, Pip goes back to his monitor', async (t) => {
+  const h = await boot(t, { displays: [LAPTOP, MONITOR], data: { display: SAVED_MONITOR } });
+  h.displays = [LAPTOP];
+  h.screen.emit('display-removed');
+  assert.deepStrictEqual(h.overlay.getBounds(), LAPTOP.workArea);
+  h.displays = [LAPTOP, MONITOR];
+  h.screen.emit('display-added');
+  assert.deepStrictEqual(h.overlay.getBounds(), MONITOR.workArea,
+    'Pip stayed on the laptop after his monitor came back');
+  assert.deepStrictEqual(h.saved().display, SAVED_MONITOR);
+  h.assertHealthy();
+});
+
+test('when Windows swaps two display ids, Pip follows his monitor by where it is', async (t) => {
+  const laptop = Object.assign({}, LAPTOP, { id: 2 });
+  const monitor = Object.assign({}, MONITOR, { id: 1 });
+  const h = await boot(t, { displays: [laptop, monitor], data: { display: SAVED_MONITOR } });
+  assert.deepStrictEqual(h.overlay.getBounds(), MONITOR.workArea,
+    'Pip went to the display that now has his old id, not to his monitor');
   h.assertHealthy();
 });
 
